@@ -1,0 +1,14 @@
+changelog:
+  exclude:
+    labels:
+      - release
+  categories:
+    - title: 💎 Features, fixes, and chores
+      labels:
+        - '*'
+      exclude:
+        labels:
+          - dependencies
+    - title: 🧰 Dependencies
+      labels:
+        - dependencies

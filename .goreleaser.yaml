@@ -1,0 +1,61 @@
+version: 2
+
+builds:
+  - binary: supermetrics
+    main: .
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/supermetrics-public/supermetrics-cli/internal/buildcfg.Version={{.Version}}
+      - -X github.com/supermetrics-public/supermetrics-cli/internal/buildcfg.Commit={{.ShortCommit}}
+      - -X github.com/supermetrics-public/supermetrics-cli/internal/buildcfg.BuildDate={{.Date}}
+      - -X github.com/supermetrics-public/supermetrics-cli/internal/buildcfg.OAuthClientID={{ .Env.SUPERMETRICS_OAUTH_CLIENT_ID }}
+      - -X 'github.com/supermetrics-public/supermetrics-cli/internal/buildcfg.OAuthScopes={{ .Env.SUPERMETRICS_OAUTH_SCOPES }}'
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore\\(deps\\):"
+
+brews:
+  - repository:
+      owner: supermetrics-public
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: https://github.com/supermetrics-public/supermetrics-cli
+    description: Command-line interface for the Supermetrics API
+    install: |
+      bin.install "supermetrics"
+    test: |
+      system "#{bin}/supermetrics", "version"
+
+snapshot:
+  version_template: "{{ .Tag }}-next"

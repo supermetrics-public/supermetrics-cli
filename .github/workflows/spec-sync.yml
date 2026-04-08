@@ -1,0 +1,60 @@
+name: Sync OpenAPI Spec
+
+on:
+  repository_dispatch:
+    types: [openapi-spec-updated]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    name: Sync OpenAPI Spec
+    runs-on: arc-ghe-default
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Install tools
+        run: make tools
+
+      - name: Fetch latest OpenAPI spec
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api repos/supermetrics-public/supermetrics-python-sdk/contents/openapi-spec.yaml \
+            --jq '.content' | base64 -d > openapi-spec.yaml
+
+      - name: Regenerate code
+        run: make generate
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create PR
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="auto/spec-update-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "chore: sync OpenAPI spec from SDK"
+          git push -u origin "$BRANCH"
+          gh pr create \
+            --title "chore: sync OpenAPI spec from SDK" \
+            --body "Automated update of \`openapi-spec.yaml\` and regenerated CLI commands." \
+            --base main

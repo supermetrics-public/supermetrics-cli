@@ -1,0 +1,113 @@
+# Maps OpenAPI operations to CLI resource groups and commands.
+# The generator reads this + openapi-spec.yaml to produce cmd/generated/*.go
+#
+# Each resource becomes a Cobra command group (e.g., "supermetrics login-links").
+# Each command within becomes a subcommand (e.g., "supermetrics login-links create").
+#
+# server_index: which server from the spec's servers[] to use (0-indexed).
+#   0 = https://api.supermetrics.com/v2 (Data API)
+#   1 = https://api.supermetrics.com (Datasource search)
+#   2 = https://api.supermetrics.com/v2 (Management API)
+#   3 = https://dts-api.supermetrics.com/v1 (DWH Backfills API)
+
+resources:
+  login-links:
+    description: "Manage OAuth login links for data source authentication"
+    server_index: 2
+    commands:
+      create:
+        operation_id: createLoginLink
+        description: "Create a new login link for OAuth authentication"
+        dry_run: true
+        spinner_text: "Creating login link..."
+      get:
+        operation_id: getLoginLink
+        description: "Get a login link by ID"
+        spinner_text: "Fetching login link..."
+      list:
+        operation_id: listLoginLinks
+        description: "List all login links"
+        spinner_text: "Fetching login links..."
+      close:
+        operation_id: closeLoginLink
+        description: "Close (deactivate) a login link"
+        confirm: "Close login link?"
+        spinner_text: "Closing login link..."
+
+  logins:
+    description: "View authenticated data source logins"
+    server_index: 2
+    commands:
+      get:
+        operation_id: getDataSourceLogin
+        description: "Get a login by ID"
+        spinner_text: "Fetching login..."
+      list:
+        operation_id: listDataSourceLogins
+        description: "List all data source logins"
+        spinner_text: "Fetching logins..."
+
+  accounts:
+    description: "List available accounts for a data source"
+    server_index: 0
+    commands:
+      list:
+        operation_id: getAccounts
+        description: "List accounts for a data source login"
+        timeout: 60m
+        spinner_text: "Fetching accounts..."
+
+  queries:
+    description: "Execute data queries against connected data sources"
+    server_index: 0
+    commands:
+      execute:
+        operation_id: getData
+        description: "Execute a data query"
+        timeout: 60m
+        spinner_text: "Fetching data..."
+        async: true
+        paginated: true
+        exclude_params:
+          - sync_timeout
+
+  backfills:
+    description: "Manage Data Warehouse backfills"
+    server_index: 3
+    commands:
+      create:
+        operation_id: createBackfill
+        description: "Create a new backfill for a transfer"
+        dry_run: true
+        spinner_text: "Creating backfill..."
+        wait: true
+        timeout: "60m"
+      get:
+        operation_id: getBackfillById
+        description: "Get a backfill by ID"
+        spinner_text: "Fetching backfill..."
+      get-latest:
+        operation_id: getLatestBackfill
+        description: "Get the latest backfill for a transfer"
+        spinner_text: "Fetching backfill..."
+      list-incomplete:
+        operation_id: listIncompleteBackfills
+        description: "List all incomplete backfills for a team"
+        spinner_text: "Fetching backfills..."
+      cancel:
+        operation_id: updateBackfillStatus
+        description: "Cancel a backfill"
+        confirm: "Cancel backfill {backfill_id}?"
+        dry_run: true
+        spinner_text: "Cancelling backfill..."
+        fixed_values:
+          status: "CANCELLED"
+
+  datasource:
+    description: "View data source configuration details"
+    server_index: 1
+    commands:
+      get:
+        operation_id: getDatasourceDetails
+        description: "Get datasource configuration details"
+        spinner_text: "Fetching data source details..."

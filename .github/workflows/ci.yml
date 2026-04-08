@@ -1,0 +1,173 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  test:
+    name: Run tests and calculate coverage
+    runs-on: arc-ghe-default
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install tools
+        run: make tools
+
+      - name: Generate code
+        run: make generate
+
+      - name: Vet
+        run: make vet
+
+      - name: Run vulnerability check
+        run: make vulncheck
+
+      - name: Build
+        run: make build
+
+      - name: Run tests
+        run: make test
+
+      - name: Calculate code coverage
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          make test-coverage 2>&1 | tee -a coverage.log
+          rc=${PIPESTATUS[0]}
+
+          # Strip ANSI color codes for clean output in GitHub Actions
+          sed -i 's/\x1B\[[0-9;]\{1,\}[A-Za-z]//g' coverage.log
+
+          exit ${rc}
+
+      - name: Add coverage comment to PR
+        uses: actions/github-script@v8
+        if: ${{ github.event_name == 'pull_request' }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { readFile } = require('node:fs/promises');
+
+            // 1. Retrieve existing bot comments for the PR
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            })
+            const botComment = comments.find(comment => {
+              return comment.user.type === 'Bot' && comment.body.includes('Code coverage report')
+            })
+
+            // 2. Parse coverage percentage from the output
+            const coverage = await readFile('coverage.log', 'utf8')
+            const totalMatch = coverage.match(/total:.*?(\d+\.\d+)%/)
+            const coveragePercent = totalMatch ? parseFloat(totalMatch[1]) : 0
+
+            // 3. Generate traffic light indicator
+            let indicator = '🔴'
+            if (coveragePercent >= 75) {
+              indicator = '🟢'
+            } else if (coveragePercent >= 40) {
+              indicator = '🟡'
+            }
+
+            // 4. Create text-based progress bar using Unicode blocks
+            const createProgressBar = (percent) => {
+              const totalBlocks = 20
+              const filledBlocks = Math.round((percent / 100) * totalBlocks)
+              const emptyBlocks = totalBlocks - filledBlocks
+              const filled = '█'.repeat(filledBlocks)
+              const empty = '░'.repeat(emptyBlocks)
+              return `\`${filled}${empty}\``
+            }
+
+            const progressBar = createProgressBar(coveragePercent)
+
+            // 5. Prepare format of the comment
+            const output = `
+            ### Code coverage report
+
+            Total coverage: ${progressBar} **${coveragePercent}%** ${indicator}
+
+            <details><summary>Detailed report</summary>
+
+            \`\`\`
+            ${coverage}
+            \`\`\`
+
+            </details>`;
+
+            // 6. If we have a comment, update it, otherwise create a new one
+            if (botComment) {
+              github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: output
+              })
+            } else {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: output
+              })
+            }
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage
+          path: coverage.out
+
+  lint:
+    name: Check lint
+    runs-on: arc-ghe-default
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install tools
+        run: make tools
+
+      - name: Generate code
+        run: make generate
+
+      - name: Check lint
+        run: make lint

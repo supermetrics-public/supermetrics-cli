@@ -1,0 +1,21 @@
+name: Aikido Scan
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  aikido-scan:
+    uses: supermetrics/aikido-workflows/.github/workflows/scan.yml@v1
+    secrets:
+      AIKIDO_API_KEY: ${{ secrets.AIKIDO_API_KEY }}
+      GHA_DOCKERHUB_USER: ${{ secrets.GHA_DOCKERHUB_USER }}
+      GHA_DOCKERHUB_PAT: ${{ secrets.GHA_DOCKERHUB_PAT }}

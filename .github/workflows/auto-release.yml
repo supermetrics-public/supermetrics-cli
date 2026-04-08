@@ -1,0 +1,61 @@
+name: Create release tag
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - openapi-spec.yaml
+      - cmd/generated/**
+      - scripts/command-mapping.yaml
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    name: Create release tag
+    runs-on: arc-ghe-default
+    # Skip if the commit message contains [skip-release]
+    if: "!contains(github.event.head_commit.message, '[skip-release]')"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Determine version bump
+        id: bump
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "latest=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+
+          # Check if new files were added in cmd/generated/ (new resource group = minor bump)
+          if git diff "$LATEST_TAG"..HEAD --diff-filter=A --name-only | grep -q '^cmd/generated/'; then
+            echo "type=minor" >> "$GITHUB_OUTPUT"
+          else
+            echo "type=patch" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compute next version
+        id: next
+        run: |
+          LATEST="${{ steps.bump.outputs.latest }}"
+          TYPE="${{ steps.bump.outputs.type }}"
+
+          # Strip leading v
+          VERSION="${LATEST#v}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+
+          if [ "$TYPE" = "minor" ]; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          else
+            PATCH=$((PATCH + 1))
+          fi
+
+          NEXT="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "version=$NEXT" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        run: |
+          git tag "${{ steps.next.outputs.version }}"
+          git push origin "${{ steps.next.outputs.version }}"

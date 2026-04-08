@@ -1,0 +1,30 @@
+# IDE
+.idea/
+.vscode/
+
+# Claude Code
+settings.local.json
+
+# Binaries
+/bin/
+
+# Testing coverage
+coverage.out
+coverage.raw.out
+
+# macOS
+.DS_Store
+
+# Environment
+.env
+
+# Python
+.venv/
+__pycache__/
+
+# Go workspace
+go.work
+go.work.sum
+
+# Claude Code
+.claude/

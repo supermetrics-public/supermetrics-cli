@@ -1,0 +1,40 @@
+version: "2"
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - gosec
+  settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+    gosec:
+      excludes:
+        - G104  # Unhandled errors on deferred Close() calls
+        - G304  # File path from variable (config file path is safe)
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+      - linters:
+          - gosec
+        text: "G117"  # False positive on marshaling config struct
+      - path: _test\.go
+        linters:
+          - gosec
+      - linters:
+          - gosec
+        text: "G204"  # Subprocess for opening browser URLs
+formatters:
+  enable:
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/supermetrics-public/supermetrics-cli
