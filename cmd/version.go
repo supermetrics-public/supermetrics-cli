@@ -14,7 +14,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show CLI version information",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Fprintf(infoWriter(), "supermetrics-cli %s (built %s, commit %s)\n", buildcfg.Version, buildcfg.BuildDate, buildcfg.Commit)
+		fmt.Fprintf(infoWriter(), "supermetrics-cli %s (Alpha) (built %s, commit %s)\n", buildcfg.Version, buildcfg.BuildDate, buildcfg.Commit)
 		update.PrintUpdateHint(infoWriterErr(), buildcfg.Version)
 	},
 }

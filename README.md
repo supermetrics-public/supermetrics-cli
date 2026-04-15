@@ -1,5 +1,8 @@
 # Supermetrics CLI
 
+> **Alpha Release** — This CLI is under active development. Features, flags, and behavior may change without notice.
+> If you encounter bugs or need help, please [open a GitHub issue](https://github.com/supermetrics-public/supermetrics-cli/issues).
+
 Command-line interface for the [Supermetrics API](https://supermetrics.com). Query marketing data, manage OAuth login
 links, schedule Data Warehouse backfills, and more from your terminal or scripts.
 
@@ -366,6 +369,12 @@ supermetrics version upgrade --force
 ```
 
 If installed via Homebrew, the CLI will direct you to use `brew upgrade` instead.
+
+## Support
+
+This CLI is in **Alpha**. If you run into issues, have questions, or want to request a feature, please open an issue:
+
+https://github.com/supermetrics-public/supermetrics-cli/issues
 
 ---
 

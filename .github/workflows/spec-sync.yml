@@ -11,7 +11,7 @@ permissions:
 jobs:
   sync:
     name: Sync OpenAPI Spec
-    runs-on: arc-ghe-default
+    runs-on: ubuntu-slim
     steps:
       - name: Checkout code
         uses: actions/checkout@v6

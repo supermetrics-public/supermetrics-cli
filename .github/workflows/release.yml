@@ -11,7 +11,7 @@ permissions:
 jobs:
   release:
     name: Create release
-    runs-on: arc-ghe-default
+    runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v6
         with:

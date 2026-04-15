@@ -37,8 +37,12 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:   "supermetrics",
-	Short: "Supermetrics CLI - interact with the Supermetrics API",
+	Short: "Supermetrics CLI (Alpha) - interact with the Supermetrics API",
 	Long: `Supermetrics CLI provides command-line access to the Supermetrics API.
+
+NOTE: This CLI is currently in Alpha. Features and behavior may change
+without notice. Please report bugs and request support at:
+  https://github.com/supermetrics-public/supermetrics-cli/issues
 
 Query marketing data, manage login links, schedule backfills, and more
 from your terminal or scripts.
