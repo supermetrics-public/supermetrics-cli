@@ -1,6 +1,6 @@
 module github.com/supermetrics-public/supermetrics-cli
 
-go 1.26.1
+go 1.26.2
 
 require (
 	github.com/creativeprojects/go-selfupdate v1.5.2
