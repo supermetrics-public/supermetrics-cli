@@ -16,16 +16,16 @@ endif
 .PHONY: build build-release run install test test-go test-python test-coverage lint lint-python lint-fix clean generate tools snapshot vet vulncheck tidy-check
 
 build:
-	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/supermetrics .
+	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/supermetrics ./cmd/supermetrics
 
 build-release:
-	CGO_ENABLED=0 go build -trimpath -ldflags "-s -w $(LDFLAGS)" -o bin/supermetrics .
+	CGO_ENABLED=0 go build -trimpath -ldflags "-s -w $(LDFLAGS)" -o bin/supermetrics ./cmd/supermetrics
 
 run:
-	go run -ldflags "$(LDFLAGS)" . $(ARGS)
+	go run -ldflags "$(LDFLAGS)" ./cmd/supermetrics $(ARGS)
 
 install:
-	go install -ldflags "$(LDFLAGS)" .
+	go install -ldflags "$(LDFLAGS)" ./cmd/supermetrics
 
 test: test-go test-python
 
