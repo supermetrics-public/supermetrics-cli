@@ -68,6 +68,8 @@ make build
    supermetrics queries execute --ds-id ga4 --fields sessions --start-date 2024-01-01 --end-date 2024-01-31 --limit 500 --max-rows 500
    ```
 
+   See the [Examples Guide](docs/examples.md) for 50+ real-world query recipes across Google Ads, Facebook Ads, GA4, and 200+ other platforms.
+
 3. List accounts for a data source:
 
    ```bash
