@@ -48,3 +48,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          SUPERMETRICS_OAUTH_CLIENT_ID: ${{ secrets.SUPERMETRICS_OAUTH_CLIENT_ID }}
+          SUPERMETRICS_OAUTH_SCOPES: ${{ secrets.SUPERMETRICS_OAUTH_SCOPES }}
