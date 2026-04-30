@@ -58,5 +58,18 @@ brews:
     test: |
       system "#{bin}/supermetrics", "version"
 
+nfpms:
+  - id: supermetrics
+    package_name: supermetrics
+    vendor: Supermetrics
+    homepage: https://github.com/supermetrics-public/supermetrics-cli
+    description: Command-line interface for the Supermetrics API
+    license: MIT
+    formats:
+      - deb
+      - rpm
+      - apk
+    bindir: /usr/bin
+
 snapshot:
   version_template: "{{ .Tag }}-next"

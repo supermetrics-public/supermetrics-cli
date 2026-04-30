@@ -61,6 +61,87 @@ brew install supermetrics-public/tap/supermetrics
 
 The tap repo needs no manual maintenance — GoReleaser updates it on every release.
 
+## Linux Packages (deb / rpm / apk)
+
+GoReleaser's `nfpms` section builds `.deb`, `.rpm`, and `.apk` packages for every release. These are uploaded to the
+GitHub Release alongside the tarballs and checksums.
+
+### Direct install from GitHub Releases
+
+Users can download and install packages directly:
+
+```bash
+# Debian / Ubuntu
+curl -LO https://github.com/supermetrics-public/supermetrics-cli/releases/latest/download/supermetrics_<version>_linux_amd64.deb
+sudo dpkg -i supermetrics_<version>_linux_amd64.deb
+
+# RHEL / Fedora / Amazon Linux
+curl -LO https://github.com/supermetrics-public/supermetrics-cli/releases/latest/download/supermetrics_<version>_linux_amd64.rpm
+sudo rpm -i supermetrics_<version>_linux_amd64.rpm
+
+# Alpine Linux
+curl -LO https://github.com/supermetrics-public/supermetrics-cli/releases/latest/download/supermetrics_<version>_linux_amd64.apk
+sudo apk add --allow-untrusted supermetrics_<version>_linux_amd64.apk
+```
+
+### APT repository (Debian / Ubuntu)
+
+To enable `apt-get install` and automatic updates, publish packages to an APT repository. Options:
+
+1. **Packagecloud** (`packagecloud.io`) — hosted, free tier available. Add a GoReleaser `publishers` section:
+   ```yaml
+   publishers:
+     - name: packagecloud
+       ids:
+         - supermetrics
+       cmd: packagecloud push supermetrics-public/supermetrics/{{ .Format }}/{{ .Distro }} {{ .ArtifactPath }}
+       env:
+         - PACKAGECLOUD_TOKEN={{ .Env.PACKAGECLOUD_TOKEN }}
+   ```
+   Users then add the repo and install:
+   ```bash
+   curl -s https://packagecloud.io/install/repositories/supermetrics-public/supermetrics/script.deb.sh | sudo bash
+   sudo apt-get install supermetrics
+   ```
+
+2. **GitHub-hosted APT repo** — use a dedicated repo (e.g., `supermetrics-public/apt-repo`) with GitHub Pages serving
+   the package index. Tools like [`reprepro`](https://wiki.debian.org/SettingUpSignedApt) or a CI action can update
+   the index on each release. Requires GPG signing for `apt` to trust the repo.
+
+### YUM / DNF repository (RHEL / Fedora / Amazon Linux)
+
+1. **Packagecloud** — same setup as APT, use the rpm endpoint:
+   ```bash
+   curl -s https://packagecloud.io/install/repositories/supermetrics-public/supermetrics/script.rpm.sh | sudo bash
+   sudo yum install supermetrics
+   ```
+
+2. **Copr** (`copr.fedorainfracloud.org`) — Fedora's community build system. Upload the `.spec` or SRPM; users enable
+   the repo with:
+   ```bash
+   sudo dnf copr enable supermetrics-public/supermetrics
+   sudo dnf install supermetrics
+   ```
+
+### Alpine repository (apk)
+
+Alpine package repositories are less common for third-party tools. The recommended approach is direct download from
+GitHub Releases (see above). For a hosted repo, Packagecloud supports Alpine as well.
+
+### Secrets needed
+
+| Secret               | Where          | Purpose                            |
+|----------------------|----------------|------------------------------------|
+| `PACKAGECLOUD_TOKEN` | CLI repo       | Push packages to Packagecloud      |
+
+### Implementation checklist
+
+- [ ] Choose a package hosting strategy (Packagecloud, self-hosted, or GitHub Releases only)
+- [ ] If using Packagecloud: create organization and repos, add `PACKAGECLOUD_TOKEN` secret
+- [ ] If self-hosted: set up GPG signing key, create APT/YUM repo infrastructure
+- [ ] Add install instructions to project README
+- [ ] Test: install `.deb` on Ubuntu, `.rpm` on Fedora, `.apk` on Alpine
+
 ## Spec Sync Workflow (`.github/workflows/spec-sync.yml`)
 
 **Trigger**: `repository_dispatch` event with type `openapi-spec-updated`, sent by the SDK repo's CI when
