@@ -24,7 +24,7 @@ Download the latest binary for your platform from the
 ### Using `go install`
 
 ```bash
-go install github.com/supermetrics-public/supermetrics-cli@latest
+go install github.com/supermetrics-public/supermetrics-cli/cmd/supermetrics@latest
 ```
 
 ### From source
@@ -446,8 +446,9 @@ The `openapi-spec.yaml` is synced from the Python SDK repo via CI. When the SDK 
 
 ```
 supermetrics-cli/
-├── main.go                        Entry point
 ├── cmd/
+│   ├── supermetrics/              Entry point (go install target)
+│   │   └── main.go
 │   ├── root.go                    Root command, global flags, config loading
 │   ├── version.go                 Version and upgrade commands
 │   ├── configure.go               Interactive config setup
