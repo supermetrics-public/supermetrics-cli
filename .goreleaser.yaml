@@ -46,7 +46,8 @@ changelog:
       - "^chore\\(deps\\):"
 
 brews:
-  - repository:
+  - name: supermetrics
+    repository:
       owner: supermetrics-public
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
