@@ -21,6 +21,26 @@ brew install supermetrics-public/tap/supermetrics
 Download the latest binary for your platform from the
 [Releases](https://github.com/supermetrics-public/supermetrics-cli/releases) page.
 
+### Linux packages (deb / rpm / apk)
+
+Pre-built packages are available on the [Releases](https://github.com/supermetrics-public/supermetrics-cli/releases)
+page. Replace `<version>` with the desired version (e.g., `0.1.0`) and `<arch>` with your architecture (`amd64` or
+`arm64`):
+
+```bash
+# Debian / Ubuntu
+curl -LO https://github.com/supermetrics-public/supermetrics-cli/releases/latest/download/supermetrics_<version>_linux_<arch>.deb
+sudo dpkg -i supermetrics_<version>_linux_<arch>.deb
+
+# RHEL / Fedora / Amazon Linux
+curl -LO https://github.com/supermetrics-public/supermetrics-cli/releases/latest/download/supermetrics_<version>_linux_<arch>.rpm
+sudo rpm -i supermetrics_<version>_linux_<arch>.rpm
+
+# Alpine Linux
+curl -LO https://github.com/supermetrics-public/supermetrics-cli/releases/latest/download/supermetrics_<version>_linux_<arch>.apk
+sudo apk add --allow-untrusted supermetrics_<version>_linux_<arch>.apk
+```
+
 ### Using `go install`
 
 ```bash
@@ -54,18 +74,20 @@ make build
 
    ```bash
    supermetrics queries execute \
-     --ds-id ga4 \
+     --ds-id GAWA \
+     --fields account_name \
      --fields sessions \
      --start-date 2024-01-01 \
-     --end-date 2024-01-31
+     --end-date 2024-01-31 \
+     --ds-accounts list.all_accounts
    ```
 
    For large result sets, use `--all` to auto-paginate or `--limit N` to cap rows.
    Combine with `--max-rows` to also limit server-side for faster queries:
 
    ```bash
-   supermetrics queries execute --ds-id ga4 --fields sessions --start-date 2024-01-01 --end-date 2024-01-31 --all
-   supermetrics queries execute --ds-id ga4 --fields sessions --start-date 2024-01-01 --end-date 2024-01-31 --limit 500 --max-rows 500
+   supermetrics queries execute --ds-id GAWA --fields sessions --start-date 2024-01-01 --end-date 2024-01-31 --ds-accounts list.all_accounts --all
+   supermetrics queries execute --ds-id GAWA --fields sessions --start-date 2024-01-01 --end-date 2024-01-31 --ds-accounts list.all_accounts --limit 500 --max-rows 500
    ```
 
    See the [Examples Guide](docs/examples.md) for 50+ real-world query recipes across Google Ads, Facebook Ads, GA4, and 200+ other platforms.
@@ -73,7 +95,7 @@ make build
 3. List accounts for a data source:
 
    ```bash
-   supermetrics accounts list --ds-id ga4
+   supermetrics accounts list --ds-id GAWA
    ```
 
 ## Authentication
@@ -168,8 +190,8 @@ API responses often contain nested objects and arrays. Each format handles them 
 
 ```bash
 supermetrics logins list -o table
-supermetrics accounts list --ds-id ga4 -o csv > accounts.csv
-supermetrics accounts list --ds-id ga4 -o table --flatten
+supermetrics accounts list --ds-id GAWA -o csv > accounts.csv
+supermetrics accounts list --ds-id GAWA -o table --flatten
 ```
 
 ### Field selection
