@@ -21,11 +21,53 @@ brew install supermetrics-public/tap/supermetrics
 Download the latest binary for your platform from the
 [Releases](https://github.com/supermetrics-public/supermetrics-cli/releases) page.
 
-### Linux packages (deb / rpm / apk)
+### APT (Debian / Ubuntu)
 
-Pre-built packages are available on the [Releases](https://github.com/supermetrics-public/supermetrics-cli/releases)
-page. Replace `<version>` with the desired version (e.g., `0.1.0`) and `<arch>` with your architecture (`amd64` or
-`arm64`):
+> **Note:** The APT repository is not yet available. Use the manual download below until the repository is set up.
+
+```bash
+# Add signing key
+curl -fsSL https://supermetrics-public.github.io/linux-packages/pubkey.gpg \
+  | sudo gpg --dearmor -o /usr/share/keyrings/supermetrics.gpg
+
+# Add repository
+echo "deb [signed-by=/usr/share/keyrings/supermetrics.gpg] https://supermetrics-public.github.io/linux-packages/ stable main" \
+  | sudo tee /etc/apt/sources.list.d/supermetrics.list
+
+# Install
+sudo apt-get update && sudo apt-get install supermetrics
+
+# Upgrade (after a new release)
+sudo apt-get update && sudo apt-get upgrade supermetrics
+```
+
+### YUM / DNF (RHEL / Fedora / Amazon Linux)
+
+> **Note:** The YUM repository is not yet available. Use the manual download below until the repository is set up.
+
+```bash
+# Add repository
+sudo tee /etc/yum.repos.d/supermetrics.repo <<EOF
+[supermetrics]
+name=Supermetrics CLI
+baseurl=https://supermetrics-public.github.io/linux-packages/yum/
+gpgcheck=1
+gpgkey=https://supermetrics-public.github.io/linux-packages/pubkey.gpg
+enabled=1
+EOF
+
+# Install
+sudo yum install supermetrics    # or: sudo dnf install supermetrics
+
+# Upgrade (after a new release)
+sudo yum update supermetrics
+```
+
+### Manual download (all Linux)
+
+Pre-built `.deb`, `.rpm`, and `.apk` packages are available on the
+[Releases](https://github.com/supermetrics-public/supermetrics-cli/releases) page. Replace `<version>` with the
+desired version (e.g., `0.1.0`) and `<arch>` with your architecture (`amd64` or `arm64`):
 
 ```bash
 # Debian / Ubuntu

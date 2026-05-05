@@ -44,11 +44,13 @@ Steps:
 **Secrets needed**:
 - `GITHUB_TOKEN` — automatic, used for creating the release
 - `HOMEBREW_TAP_TOKEN` — GitHub PAT with `repo` scope on `supermetrics-public/homebrew-tap`, stored as a repo secret
+  and in 1Password (`GitHub PAT — Homebrew Tap`)
+- `LINUX_PACKAGES_TOKEN` — GitHub PAT with `repo` scope on `supermetrics-public/linux-packages`, stored as a repo
+  secret and in 1Password (`GitHub PAT — Linux Packages`)
 
 ## Homebrew Tap Repository (`supermetrics-public/homebrew-tap`)
 
-Create a separate public repo `supermetrics-public/homebrew-tap`. GoReleaser auto-pushes the formula file on each
-release. The formula:
+GoReleaser auto-pushes the formula file on each release. The formula:
 - Downloads the correct archive for the user's OS/arch
 - Verifies SHA256 checksum
 - Installs the `supermetrics` binary
@@ -61,6 +63,33 @@ brew install supermetrics-public/tap/supermetrics
 
 The tap repo needs no manual maintenance — GoReleaser updates it on every release.
 
+### Repo setup instructions
+
+1. **Create the repo**: `supermetrics-public/homebrew-tap` — **public** (required for `brew install` to work without
+   authentication; Homebrew taps must be public repos)
+2. **Initialize**: The repo can be completely empty — GoReleaser creates and pushes the formula file automatically on
+   the first release
+3. **GitHub PAT**: Create a fine-grained PAT or classic PAT with `repo` scope on `homebrew-tap`:
+   - Store in 1Password as `GitHub PAT — Homebrew Tap`
+   - Add as `HOMEBREW_TAP_TOKEN` secret in `supermetrics-cli` repo
+   - GoReleaser uses this token to push the formula file (see `brews` section in `.goreleaser.yaml`)
+
+**Security and branch protection settings:**
+
+| Setting                              | Value    | Why                                                                    |
+|--------------------------------------|----------|------------------------------------------------------------------------|
+| Visibility                           | Public   | Required for `brew install` to work                                    |
+| Default branch                       | `main`   |                                                                        |
+| Require pull request before merging  | Off      | GoReleaser pushes directly to the default branch                       |
+| Require status checks                | Off      | No CI needed — the formula is generated, not hand-written              |
+| Allow force pushes                   | Off      | Prevent accidental history rewrites                                    |
+| Allow deletions                      | Off      |                                                                        |
+| Restrict who can push                | Optional | Lock down to the PAT's user account + org admins if desired            |
+| Require signed commits               | Off      | GoReleaser does not sign commits                                       |
+
+**No additional workflows, secrets, or environments are needed in this repo.** GoReleaser in the CLI repo handles
+everything via the PAT.
+
 ## Linux Packages (deb / rpm / apk)
 
 GoReleaser's `nfpms` section builds `.deb`, `.rpm`, and `.apk` packages for every release. These are uploaded to the
@@ -68,7 +97,7 @@ GitHub Release alongside the tarballs and checksums.
 
 ### Direct install from GitHub Releases
 
-Users can download and install packages directly:
+Users can download and install packages directly (no repo setup needed):
 
 ```bash
 # Debian / Ubuntu
@@ -84,63 +113,314 @@ curl -LO https://github.com/supermetrics-public/supermetrics-cli/releases/latest
 sudo apk add --allow-untrusted supermetrics_<version>_linux_amd64.apk
 ```
 
-### APT repository (Debian / Ubuntu)
+### Linux Package Repository (`supermetrics-public/linux-packages`)
 
-To enable `apt-get install` and automatic updates, publish packages to an APT repository. Options:
+APT and YUM/DNF repos are hosted on GitHub Pages via a separate repo, following the same pattern as the Homebrew tap
+(`supermetrics-public/homebrew-tap`). GoReleaser uploads `.deb`/`.rpm` to the GitHub Release, then a
+`repository_dispatch` triggers the `linux-packages` repo to rebuild the APT and YUM repo metadata and deploy to
+GitHub Pages.
 
-1. **Packagecloud** (`packagecloud.io`) — hosted, free tier available. Add a GoReleaser `publishers` section:
-   ```yaml
-   publishers:
-     - name: packagecloud
-       ids:
-         - supermetrics
-       cmd: packagecloud push supermetrics-public/supermetrics/{{ .Format }}/{{ .Distro }} {{ .ArtifactPath }}
-       env:
-         - PACKAGECLOUD_TOKEN={{ .Env.PACKAGECLOUD_TOKEN }}
-   ```
-   Users then add the repo and install:
-   ```bash
-   curl -s https://packagecloud.io/install/repositories/supermetrics-public/supermetrics/script.deb.sh | sudo bash
-   sudo apt-get install supermetrics
-   ```
+**Base URL**: `https://supermetrics-public.github.io/linux-packages/`
 
-2. **GitHub-hosted APT repo** — use a dedicated repo (e.g., `supermetrics-public/apt-repo`) with GitHub Pages serving
-   the package index. Tools like [`reprepro`](https://wiki.debian.org/SettingUpSignedApt) or a CI action can update
-   the index on each release. Requires GPG signing for `apt` to trust the repo.
+#### 1. GPG signing key
 
-### YUM / DNF repository (RHEL / Fedora / Amazon Linux)
+APT and YUM repos require signed metadata. Generate a dedicated key for CI:
 
-1. **Packagecloud** — same setup as APT, use the rpm endpoint:
-   ```bash
-   curl -s https://packagecloud.io/install/repositories/supermetrics-public/supermetrics/script.rpm.sh | sudo bash
-   sudo yum install supermetrics
-   ```
+```bash
+# Generate key (no passphrase, for CI use)
+gpg --batch --gen-key <<EOF
+%no-protection
+Key-Type: RSA
+Key-Length: 4096
+Name-Real: Supermetrics CLI
+Name-Email: cli@supermetrics.com
+Expire-Date: 0
+EOF
 
-2. **Copr** (`copr.fedorainfracloud.org`) — Fedora's community build system. Upload the `.spec` or SRPM; users enable
-   the repo with:
-   ```bash
-   sudo dnf copr enable supermetrics-public/supermetrics
-   sudo dnf install supermetrics
-   ```
+# Find the 40-char fingerprint
+gpg --list-keys "cli@supermetrics.com"
+# Example output: ABCD1234EFGH5678...
 
-### Alpine repository (apk)
+# Export private key → GitHub secret + 1Password
+gpg --armor --export-secret-keys cli@supermetrics.com > private.asc
 
-Alpine package repositories are less common for third-party tools. The recommended approach is direct download from
-GitHub Releases (see above). For a hosted repo, Packagecloud supports Alpine as well.
+# Export binary public key → committed to linux-packages repo
+gpg --export cli@supermetrics.com > pubkey.gpg
+```
+
+**1Password storage:** Store both keys and the fingerprint in 1Password before proceeding:
+
+1. Create a **Secure Note** in 1Password (e.g., in a shared "Supermetrics CLI / CI" vault):
+   - **Title**: `GPG Signing Key — Linux Packages`
+   - **Fields**:
+     - `Private Key (armored)` — paste contents of `private.asc`
+     - `Key Fingerprint` — the 40-char fingerprint
+   - **Attachments**: attach `pubkey.gpg` (binary public key)
+2. Copy the private key and fingerprint from 1Password into the GitHub secrets/variables (see step 2 below)
+3. **Delete `private.asc` from your local machine** — 1Password is now the source of truth for recovery
+
+#### 2. Create the `linux-packages` repo
+
+Create a new **public** repo: `supermetrics-public/linux-packages` (same pattern as `homebrew-tap` — an infrastructure
+repo populated automatically by CI).
+
+**Why public?** GitHub Pages for free requires a public repo. The repo only contains package metadata, the public GPG
+key, and CI workflows — no proprietary code or credentials.
+
+##### Repository structure
+
+```
+linux-packages/
+├── .github/workflows/
+│   └── update-repo.yml    ← rebuilds APT + YUM metadata, deploys to Pages
+├── pubkey.gpg              ← binary public GPG key (committed)
+└── index.html              ← optional landing page for browser visitors
+```
+
+##### Configuration steps
+
+1. **GitHub Pages**: Settings → Pages → Source → **GitHub Actions**
+2. **Secrets** (Settings → Secrets and variables → Actions):
+
+   | Name                 | Type     | Value                                       | 1Password source                     |
+   |----------------------|----------|---------------------------------------------|--------------------------------------|
+   | `GPG_PRIVATE_KEY`    | Secret   | Contents of `private.asc` (armored key)     | `GPG Signing Key — Linux Packages`   |
+   | `KEY_ID`             | Variable | 40-char GPG fingerprint                     | `GPG Signing Key — Linux Packages`   |
+
+3. **Environment**: Create an environment named `github-pages` (required by `deploy-pages` action).
+   No additional environment protection rules needed — the workflow only runs on `repository_dispatch`
+   (triggered by the CLI repo's release workflow) or manual `workflow_dispatch`
+
+##### Security and branch protection settings
+
+| Setting                              | Value    | Why                                                                    |
+|--------------------------------------|----------|------------------------------------------------------------------------|
+| Visibility                           | Public   | Required for free GitHub Pages hosting                                 |
+| Default branch                       | `main`   |                                                                        |
+| Require pull request before merging  | On       | Workflow and config changes should be reviewed                         |
+| Require approvals                    | 1        | At least one reviewer for workflow changes                             |
+| Require status checks                | Off      | No CI tests in this repo                                               |
+| Allow force pushes                   | Off      | Prevent accidental history rewrites                                    |
+| Allow deletions                      | Off      |                                                                        |
+| Restrict who can push                | Optional | Lock to org admins if desired                                          |
+| Require signed commits               | Off      |                                                                        |
+
+**Note on the `github-pages` environment:** GitHub automatically creates deployment protection for GitHub Pages.
+The `deploy-pages` action requires the `id-token: write` permission and the `github-pages` environment. No additional
+approval gates are needed — the deployment is only triggered by `repository_dispatch` from the CLI repo (requires
+the `LINUX_PACKAGES_TOKEN` PAT) or by a manual `workflow_dispatch` (requires write access to the repo).
+
+Unlike `homebrew-tap`, this repo has actual committed files (`pubkey.gpg`, workflow, optional `index.html`), so
+branch protection with PR reviews is recommended to prevent accidental changes to the signing key or workflow.
+
+#### 3. Update workflow in `linux-packages` repo
+
+Create `.github/workflows/update-repo.yml`:
+
+```yaml
+name: Update package repos
+
+on:
+  # Triggered by supermetrics-cli release.yml after GoReleaser finishes
+  repository_dispatch:
+    types: [release-published]
+  # Manual trigger for testing or rebuilding
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.3.1)"
+        required: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  update-repos:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      KEY_ID: ${{ vars.KEY_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          TAG="${{ github.event.client_payload.tag || inputs.tag }}"
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y reprepro createrepo-c
+
+      - name: Import GPG key
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          echo "$KEY_ID:6:" | gpg --batch --import-ownertrust
+
+      - name: Download .deb and .rpm packages from release
+        run: |
+          mkdir -p downloads
+          gh release download "${{ steps.version.outputs.tag }}" \
+            --repo supermetrics-public/supermetrics-cli \
+            --pattern "*.deb" \
+            --pattern "*.rpm" \
+            --dir downloads
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ---------- APT repo (served at root: /dists/, /pool/) ----------
+      - name: Build APT repo
+        run: |
+          mkdir -p apt-repo/conf
+
+          cat > apt-repo/conf/distributions <<DISTCONF
+          Origin: Supermetrics
+          Label: Supermetrics CLI
+          Suite: stable
+          Codename: stable
+          Components: main
+          Architectures: amd64 arm64
+          SignWith: $KEY_ID
+          DISTCONF
+
+          for deb in downloads/*.deb; do
+            reprepro -Vb apt-repo includedeb stable "$deb"
+          done
+
+          cp pubkey.gpg apt-repo/pubkey.gpg
+
+      # ---------- YUM/DNF repo (served at /yum/) ----------
+      - name: Build YUM repo
+        run: |
+          mkdir -p yum-repo/packages
+          cp downloads/*.rpm yum-repo/packages/
+          createrepo_c yum-repo
+          gpg --batch --yes --detach-sign --armor yum-repo/repodata/repomd.xml
+
+      # ---------- Combine and deploy to GitHub Pages ----------
+      - name: Assemble site
+        run: |
+          mkdir -p site/yum
+          cp -r apt-repo/* site/
+          cp -r yum-repo/* site/yum/
+          cp pubkey.gpg site/
+          [ -f index.html ] && cp index.html site/
+
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - uses: actions/deploy-pages@v4
+        id: deployment
+```
+
+#### 4. Trigger from release workflow
+
+Add a `repository_dispatch` step at the end of `.github/workflows/release.yml` in this repo (the CLI repo), after the
+GoReleaser step. This mirrors the pattern used by the SDK repo to trigger `spec-sync.yml`:
+
+```yaml
+      - name: Notify linux-packages repo
+        if: success()
+        run: |
+          gh api repos/supermetrics-public/linux-packages/dispatches \
+            -f event_type=release-published \
+            -f 'client_payload[tag]=${{ github.ref_name }}'
+        env:
+          GH_TOKEN: ${{ secrets.LINUX_PACKAGES_TOKEN }}
+```
+
+Requires a `LINUX_PACKAGES_TOKEN` secret in the CLI repo — a GitHub PAT with `repo` scope on `linux-packages`.
+Same pattern as `HOMEBREW_TAP_TOKEN` for the Homebrew tap and `CLI_DISPATCH_TOKEN` for the SDK→CLI dispatch.
+
+#### 5. User install instructions
+
+**APT (Debian / Ubuntu):**
+```bash
+# Add signing key
+curl -fsSL https://supermetrics-public.github.io/linux-packages/pubkey.gpg \
+  | sudo gpg --dearmor -o /usr/share/keyrings/supermetrics.gpg
+
+# Add repository
+echo "deb [signed-by=/usr/share/keyrings/supermetrics.gpg] https://supermetrics-public.github.io/linux-packages/ stable main" \
+  | sudo tee /etc/apt/sources.list.d/supermetrics.list
+
+# Install
+sudo apt-get update && sudo apt-get install supermetrics
+
+# Upgrade (after a new release)
+sudo apt-get update && sudo apt-get upgrade supermetrics
+```
+
+**YUM / DNF (RHEL / Fedora / Amazon Linux):**
+```bash
+# Add repository
+sudo tee /etc/yum.repos.d/supermetrics.repo <<EOF
+[supermetrics]
+name=Supermetrics CLI
+baseurl=https://supermetrics-public.github.io/linux-packages/yum/
+gpgcheck=1
+gpgkey=https://supermetrics-public.github.io/linux-packages/pubkey.gpg
+enabled=1
+EOF
+
+# Install
+sudo yum install supermetrics    # or: sudo dnf install supermetrics
+
+# Upgrade (after a new release)
+sudo yum update supermetrics
+```
+
+**Alpine Linux (apk):** Alpine package repos require a different signing mechanism (`abuild-sign`) and are uncommon
+for third-party tools. Use direct install from GitHub Releases (see above).
+
+### Package history and GitHub Pages limits
+
+GitHub Pages has a **1 GB storage** and **100 GB bandwidth/month** cap. With typical CLI binaries (~10 MB per
+platform/arch combo, 4 Linux packages per release), this allows roughly 20–25 releases before needing cleanup.
+
+The workflow above does **not** preserve packages from previous releases — each run rebuilds the repo from the
+latest release only. This keeps the setup simple and well within Pages limits. To retain multiple versions,
+the workflow can be extended to download packages from the N most recent releases using
+`gh release list --limit N` before running `reprepro includedeb` for each.
 
 ### Secrets needed
 
-| Secret               | Where          | Purpose                            |
-|----------------------|----------------|------------------------------------|
-| `PACKAGECLOUD_TOKEN` | CLI repo       | Push packages to Packagecloud      |
+| Secret                 | Repo               | Purpose                                           | 1Password entry                      |
+|------------------------|--------------------|---------------------------------------------------|--------------------------------------|
+| `GPG_PRIVATE_KEY`      | `linux-packages`   | Sign APT and YUM repo metadata                    | `GPG Signing Key — Linux Packages`   |
+| `KEY_ID` (variable)    | `linux-packages`   | GPG key fingerprint                               | `GPG Signing Key — Linux Packages`   |
+| `LINUX_PACKAGES_TOKEN` | `supermetrics-cli`  | Trigger `repository_dispatch` on `linux-packages` | `GitHub PAT — Linux Packages`        |
+
+Compare with the Homebrew tap setup: `HOMEBREW_TAP_TOKEN` in `supermetrics-cli` serves the same role as
+`LINUX_PACKAGES_TOKEN` — a PAT that allows the CLI release workflow to push to / dispatch events on another repo.
+
+**All secrets must be stored in 1Password before being added to GitHub.** GitHub repo secrets cannot be read back
+after creation — 1Password is the recovery path if a secret needs to be rotated or re-added.
 
 ### Implementation checklist
 
-- [ ] Choose a package hosting strategy (Packagecloud, self-hosted, or GitHub Releases only)
-- [ ] If using Packagecloud: create organization and repos, add `PACKAGECLOUD_TOKEN` secret
-- [ ] If self-hosted: set up GPG signing key, create APT/YUM repo infrastructure
+- [x] Generate GPG signing key (RSA 4096, no passphrase)
+- [x] Store GPG private key, public key, and fingerprint in 1Password (`GPG Signing Key — Linux Packages`)
+- [x] Create `supermetrics-public/linux-packages` repo (public, empty) — **requires GitHub admin**
+- [x] Commit `pubkey.gpg` and `.github/workflows/update-repo.yml` to the repo
+- [x] Enable GitHub Pages with GitHub Actions source — **requires GitHub admin**
+- [x] Add `GPG_PRIVATE_KEY` secret and `KEY_ID` variable to `linux-packages` repo (copy from 1Password)
+- [x] Create `github-pages` environment in `linux-packages` repo
+- [x] Create GitHub PAT with `repo` scope on `linux-packages`, store in 1Password (`GitHub PAT — Linux Packages`)
+- [x] Add `LINUX_PACKAGES_TOKEN` secret to `supermetrics-cli` repo (copy PAT from 1Password) — **requires GitHub admin**
+- [x] Add the `repository_dispatch` step to `.github/workflows/release.yml`
+- [x] Delete `private.asc` from local machine (1Password is now the source of truth)
+- [ ] Test: push a tag manually, verify GoReleaser produces `.deb`/`.rpm`, verify `linux-packages` workflow triggers
+- [ ] Test: install `.deb` on Ubuntu via the APT repo, `.rpm` on Fedora via YUM repo
 - [ ] Add install instructions to project README
-- [ ] Test: install `.deb` on Ubuntu, `.rpm` on Fedora, `.apk` on Alpine
 
 ## Spec Sync Workflow (`.github/workflows/spec-sync.yml`)
 
@@ -173,7 +453,8 @@ Steps:
     event-type: openapi-spec-updated
 ```
 
-Requires a `CLI_DISPATCH_TOKEN` secret in the SDK repo (GitHub PAT with `repo` scope on the CLI repo).
+Requires a `CLI_DISPATCH_TOKEN` secret in the SDK repo (GitHub PAT with `repo` scope on the CLI repo). Store the PAT
+in 1Password as `GitHub PAT — CLI Dispatch` before adding it to the SDK repo's secrets.
 
 ## Auto-Release Workflow (`.github/workflows/auto-release.yml`)
 
@@ -209,23 +490,49 @@ marker in the commit message can bypass it.
 5. auto-release.yml detects generated code changes on main
 6. New tag created (e.g., v0.3.1)
 7. release.yml triggered by tag push
-8. GoReleaser builds binaries for 5 platforms
-9. GitHub Release published with binaries + checksums
-10. Homebrew tap formula auto-updated
-11. Users see "new version available" within a week (periodic check)
-12. Users run "supermetrics version upgrade" → binary replaced in-place
+8. GoReleaser builds binaries for 5 platforms, .deb/.rpm/.apk packages
+9. GitHub Release published with binaries + checksums + packages
+10. Homebrew tap formula auto-updated (via GoReleaser brews section)
+11. release.yml sends repository_dispatch to linux-packages repo
+12. linux-packages rebuilds APT + YUM repo metadata, deploys to GitHub Pages
+13. Users see "new version available" within a week (periodic check)
+14. Users run "supermetrics version upgrade" → binary replaced in-place
 ```
+
+## 1Password Inventory
+
+All CI/CD secrets are stored in 1Password as the source of truth. GitHub repo secrets cannot be read back after
+creation — 1Password is the recovery path for rotation or re-provisioning.
+
+Recommended vault: a shared team vault (e.g., "Supermetrics CLI / CI") accessible to engineers with GitHub admin access.
+
+| 1Password entry                      | Type        | Contains                                   | Used by                               |
+|--------------------------------------|-------------|--------------------------------------------|-----------------------------------------|
+| `GPG Signing Key — Linux Packages`   | Secure Note | Private key (armored), fingerprint, pubkey | `linux-packages` repo secrets           |
+| `GitHub PAT — Homebrew Tap`          | Login/Token | Classic PAT, `repo` scope on `homebrew-tap`| `HOMEBREW_TAP_TOKEN` in `supermetrics-cli` |
+| `GitHub PAT — Linux Packages`        | Login/Token | Classic PAT, `repo` scope on `linux-packages` | `LINUX_PACKAGES_TOKEN` in `supermetrics-cli` |
+| `GitHub PAT — CLI Dispatch`          | Login/Token | Classic PAT, `repo` scope on `supermetrics-cli` | `CLI_DISPATCH_TOKEN` in SDK repo       |
+
+**Rotation procedure**: Generate a new PAT/key → update the 1Password entry → update the GitHub secret → verify the
+next release succeeds. PATs should use the minimum required scope (`repo` on the single target repo when possible).
 
 ## Implementation Checklist
 
-- [x] Create `.goreleaser.yaml` with builds, archives, checksum, brews sections
+- [x] Create `.goreleaser.yaml` with builds, archives, checksum, brews, nfpms sections
 - [x] Create `.github/workflows/release.yml` (tag-triggered, runs GoReleaser)
 - [x] Create `.github/workflows/spec-sync.yml` (repository_dispatch handler)
 - [x] Create `.github/workflows/auto-release.yml` (tag bumper on generated code changes)
-- [ ] Create `supermetrics-public/homebrew-tap` repo (empty, GoReleaser populates it) — **requires GitHub admin**
+- [ ] Create `supermetrics-public/homebrew-tap` repo — **requires GitHub admin** (see setup instructions above)
+- [ ] Create `supermetrics-public/linux-packages` repo — **requires GitHub admin** (see setup instructions above)
+- [ ] Generate GPG signing key, store in 1Password (`GPG Signing Key — Linux Packages`)
+- [ ] Create GitHub PATs, store in 1Password, add as repo secrets:
+  - `HOMEBREW_TAP_TOKEN` in `supermetrics-cli` → 1Password `GitHub PAT — Homebrew Tap`
+  - `LINUX_PACKAGES_TOKEN` in `supermetrics-cli` → 1Password `GitHub PAT — Linux Packages`
+  - `CLI_DISPATCH_TOKEN` in SDK repo → 1Password `GitHub PAT — CLI Dispatch`
 - [ ] Add dispatch step to SDK repo's CI workflow — **requires SDK repo access**
-- [ ] Set up repo secrets: `HOMEBREW_TAP_TOKEN`, `CLI_DISPATCH_TOKEN` — **requires GitHub admin**
 - [ ] Test: push a tag manually, verify GoReleaser produces correct artifacts
+- [ ] Test: verify Homebrew tap formula is updated
+- [ ] Test: verify `linux-packages` workflow triggers and APT/YUM repos are published
 - [ ] Test: trigger spec-sync manually via `gh api`, verify PR is created
 - [ ] Test: merge spec-sync PR, verify auto-release creates tag and release
 
@@ -260,6 +567,7 @@ marker in the commit message can bypass it.
 2. **No meaningful changelog for spec syncs.** All spec-sync PRs have the same commit message ("chore: sync OpenAPI spec
    from SDK"). The PR body could be enhanced to list which operations changed.
 
-3. **Infrastructure not yet provisioned.** The Homebrew tap repo (`supermetrics-public/homebrew-tap`), repo secrets
-   (`HOMEBREW_TAP_TOKEN`, `CLI_DISPATCH_TOKEN`), and the SDK-side dispatch step all require GitHub admin setup. See the
-   implementation checklist above.
+3. **Infrastructure not yet provisioned.** The Homebrew tap repo (`supermetrics-public/homebrew-tap`), Linux packages
+   repo (`supermetrics-public/linux-packages`), repo secrets (`HOMEBREW_TAP_TOKEN`, `LINUX_PACKAGES_TOKEN`,
+   `CLI_DISPATCH_TOKEN`), GPG signing key, and the SDK-side dispatch step all require GitHub admin setup. See the
+   implementation checklist and repo setup instructions above.
