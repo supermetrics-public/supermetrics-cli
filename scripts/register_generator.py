@@ -25,16 +25,18 @@ def _gen_imports(imports):
 def _gen_all_imports():
     """Emit the full import block used by generated helper files. goimports cleans unused ones."""
     return _gen_imports([
-        ("stdlib", ["bufio", "context", "encoding/json", "fmt", "io", "net/http", "net/url", "os", "strings", "time"]),
+        ("stdlib", ["bufio", "context", "encoding/json", "fmt", "io", "net/http", "net/url", "os", "strings", "sync", "time"]),
         ("third", [
             "github.com/mattn/go-isatty",
             "github.com/schollz/progressbar/v3",
             "github.com/spf13/cobra",
             "github.com/spf13/viper",
+            "golang.org/x/term",
         ]),
         ("internal", [
             "github.com/supermetrics-public/supermetrics-cli/internal/auth",
             "github.com/supermetrics-public/supermetrics-cli/internal/buildcfg",
+            "github.com/supermetrics-public/supermetrics-cli/internal/cli",
             "github.com/supermetrics-public/supermetrics-cli/internal/config",
             "github.com/supermetrics-public/supermetrics-cli/internal/httpclient",
             "github.com/supermetrics-public/supermetrics-cli/internal/output",
@@ -188,14 +190,14 @@ def _gen_request_go():
     lines.append("\treturn isTerminal(os.Stdout)")
     lines.append("}")
     lines.append("")
-    lines.append("// executeRequest sends an HTTP request and returns the parsed JSON response.")
-    lines.append("func executeRequest(cmd *cobra.Command, method, url string, body io.Reader, apiKey string, timeout time.Duration, spinnerText string) (any, error) {")
+    lines.append("// doRequest sends an HTTP request with spinner, returning the raw response.")
+    lines.append("func doRequest(cmd *cobra.Command, method, url string, body io.Reader, apiKey string, timeout time.Duration, spinnerText string) (*httpclient.Response, error) {")
     lines.append('\tverbose, _ := cmd.Root().PersistentFlags().GetBool("verbose")')
     lines.append('\tnoRetry, _ := cmd.Root().PersistentFlags().GetBool("no-retry")')
     lines.append('\tquiet, _ := cmd.Root().PersistentFlags().GetBool("quiet")')
     lines.append("")
     lines.extend(_gen_spinner_block(1))
-    lines.append("\tresp, err := httpclient.Do(context.Background(), httpclient.Request{")
+    lines.append("\treturn httpclient.Do(context.Background(), httpclient.Request{")
     lines.append("\t\tMethod:       method,")
     lines.append("\t\tURL:          url,")
     lines.append("\t\tBody:         body,")
@@ -205,10 +207,21 @@ def _gen_request_go():
     lines.append("\t\tClient:       httpClient,")
     lines.append("\t\tDisableRetry: noRetry,")
     lines.append("\t})")
+    lines.append("}")
+    lines.append("")
+    lines.append("// executeRequest sends an HTTP request and returns the parsed JSON response.")
+    lines.append("func executeRequest(cmd *cobra.Command, method, url string, body io.Reader, apiKey string, timeout time.Duration, spinnerText string) (any, error) {")
+    lines.append("\tresp, err := doRequest(cmd, method, url, body, apiKey, timeout, spinnerText)")
     lines.append("\tif err != nil {")
     lines.append("\t\treturn nil, err")
     lines.append("\t}")
     lines.append("\treturn resp.ParseJSON()")
+    lines.append("}")
+    lines.append("")
+    lines.append("// executeRequestNoContent sends an HTTP request that returns no content body.")
+    lines.append("func executeRequestNoContent(cmd *cobra.Command, method, url string, body io.Reader, apiKey string, timeout time.Duration, spinnerText string) error {")
+    lines.append("\t_, err := doRequest(cmd, method, url, body, apiKey, timeout, spinnerText)")
+    lines.append("\treturn err")
     lines.append("}")
     lines.append("")
     lines.append("// printResult formats and prints the result to stdout using the command's output flags.")
@@ -594,6 +607,18 @@ def _gen_prompt_go():
     lines.append("\t}")
     lines.append("}")
     lines.append("")
+    lines.append("var (")
+    lines.append("\tstdinReader     *bufio.Reader")
+    lines.append("\tstdinReaderOnce sync.Once")
+    lines.append(")")
+    lines.append("")
+    lines.append("func getStdinReader() *bufio.Reader {")
+    lines.append("\tstdinReaderOnce.Do(func() {")
+    lines.append("\t\tstdinReader = bufio.NewReader(os.Stdin)")
+    lines.append("\t})")
+    lines.append("\treturn stdinReader")
+    lines.append("}")
+    lines.append("")
     lines.append("// confirmAction prompts the user for confirmation before a destructive action.")
     lines.append("// Skipped when --yes flag is set or stdin is not a terminal.")
     lines.append("func confirmAction(cmd *cobra.Command, message string) error {")
@@ -605,7 +630,7 @@ def _gen_prompt_go():
     lines.append("\t\treturn nil")
     lines.append("\t}")
     lines.append('\tfmt.Fprintf(cmd.ErrOrStderr(), "%s [y/N]: ", message)')
-    lines.append("\tanswer, err := bufio.NewReader(os.Stdin).ReadString('\\n')")
+    lines.append("\tanswer, err := getStdinReader().ReadString('\\n')")
     lines.append("\tif err != nil {")
     lines.append('\t\treturn fmt.Errorf("cancelled")')
     lines.append("\t}")
@@ -614,6 +639,25 @@ def _gen_prompt_go():
     lines.append('\t\treturn fmt.Errorf("cancelled")')
     lines.append("\t}")
     lines.append("\treturn nil")
+    lines.append("}")
+    lines.append("")
+    lines.append("// readSecureInput reads a value from the user, masking input when stdin is a terminal.")
+    lines.append("func readSecureInput(cmd *cobra.Command, prompt string) (string, error) {")
+    lines.append("\tw := cmd.ErrOrStderr()")
+    lines.append("\tif isTerminal(os.Stdin) {")
+    lines.append('\t\tfmt.Fprintf(w, "%s: ", prompt)')
+    lines.append("\t\traw, err := term.ReadPassword(int(os.Stdin.Fd()))")
+    lines.append("\t\tif err != nil {")
+    lines.append('\t\t\treturn "", fmt.Errorf("failed to read input: %w", err)')
+    lines.append("\t\t}")
+    lines.append("\t\tfmt.Fprintln(w)")
+    lines.append("\t\treturn string(raw), nil")
+    lines.append("\t}")
+    lines.append("\tline, err := getStdinReader().ReadString('\\n')")
+    lines.append('\tif err != nil && err != io.EOF {')
+    lines.append('\t\treturn "", fmt.Errorf("failed to read from stdin: %w", err)')
+    lines.append("\t}")
+    lines.append('\treturn strings.TrimRight(line, "\\n\\r"), nil')
     lines.append("}")
     return "\n".join(lines) + "\n"
 

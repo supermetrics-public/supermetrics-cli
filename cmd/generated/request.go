@@ -48,8 +48,8 @@ func shouldUseColor(cmd *cobra.Command) bool {
 	return isTerminal(os.Stdout)
 }
 
-// executeRequest sends an HTTP request and returns the parsed JSON response.
-func executeRequest(cmd *cobra.Command, method, url string, body io.Reader, apiKey string, timeout time.Duration, spinnerText string) (any, error) {
+// doRequest sends an HTTP request with spinner, returning the raw response.
+func doRequest(cmd *cobra.Command, method, url string, body io.Reader, apiKey string, timeout time.Duration, spinnerText string) (*httpclient.Response, error) {
 	verbose, _ := cmd.Root().PersistentFlags().GetBool("verbose")
 	noRetry, _ := cmd.Root().PersistentFlags().GetBool("no-retry")
 	quiet, _ := cmd.Root().PersistentFlags().GetBool("quiet")
@@ -84,7 +84,7 @@ func executeRequest(cmd *cobra.Command, method, url string, body io.Reader, apiK
 		}()
 	}
 
-	resp, err := httpclient.Do(context.Background(), httpclient.Request{
+	return httpclient.Do(context.Background(), httpclient.Request{
 		Method:       method,
 		URL:          url,
 		Body:         body,
@@ -94,10 +94,21 @@ func executeRequest(cmd *cobra.Command, method, url string, body io.Reader, apiK
 		Client:       httpClient,
 		DisableRetry: noRetry,
 	})
+}
+
+// executeRequest sends an HTTP request and returns the parsed JSON response.
+func executeRequest(cmd *cobra.Command, method, url string, body io.Reader, apiKey string, timeout time.Duration, spinnerText string) (any, error) {
+	resp, err := doRequest(cmd, method, url, body, apiKey, timeout, spinnerText)
 	if err != nil {
 		return nil, err
 	}
 	return resp.ParseJSON()
+}
+
+// executeRequestNoContent sends an HTTP request that returns no content body.
+func executeRequestNoContent(cmd *cobra.Command, method, url string, body io.Reader, apiKey string, timeout time.Duration, spinnerText string) error {
+	_, err := doRequest(cmd, method, url, body, apiKey, timeout, spinnerText)
+	return err
 }
 
 // printResult formats and prints the result to stdout using the command's output flags.

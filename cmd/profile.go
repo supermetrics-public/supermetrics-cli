@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/supermetrics-public/supermetrics-cli/internal/cli"
 	"github.com/supermetrics-public/supermetrics-cli/internal/config"
 	"github.com/supermetrics-public/supermetrics-cli/internal/exitcode"
 )
@@ -29,7 +30,7 @@ var profileListCmd = &cobra.Command{
 		}
 
 		if len(cfg.Profiles) == 0 {
-			fmt.Fprintln(infoWriter(), "No profiles configured. Run 'supermetrics configure' to create one.")
+			fmt.Fprintln(cli.InfoWriter(cmd), "No profiles configured. Run 'supermetrics configure' to create one.")
 			return nil
 		}
 
@@ -90,7 +91,7 @@ var profileUseCmd = &cobra.Command{
 			return fmt.Errorf("failed to save config: %w", err)
 		}
 
-		fmt.Fprintf(infoWriter(), "Active profile set to %q.\n", name)
+		fmt.Fprintf(cli.InfoWriter(cmd), "Active profile set to %q.\n", name)
 		return nil
 	},
 }
@@ -125,7 +126,7 @@ var profileDeleteCmd = &cobra.Command{
 			return fmt.Errorf("failed to save config: %w", err)
 		}
 
-		fmt.Fprintf(infoWriter(), "Profile %q deleted.\n", name)
+		fmt.Fprintf(cli.InfoWriter(cmd), "Profile %q deleted.\n", name)
 		return nil
 	},
 }

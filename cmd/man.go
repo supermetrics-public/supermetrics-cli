@@ -5,6 +5,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
+
+	"github.com/supermetrics-public/supermetrics-cli/internal/cli"
 )
 
 var manCmd = &cobra.Command{
@@ -21,7 +23,7 @@ var manCmd = &cobra.Command{
 		if err := doc.GenManTree(rootCmd, header, dir); err != nil {
 			return fmt.Errorf("failed to generate man pages: %w", err)
 		}
-		fmt.Fprintf(infoWriter(), "Man pages written to %s\n", dir)
+		fmt.Fprintf(cli.InfoWriter(cmd), "Man pages written to %s\n", dir)
 		return nil
 	},
 }

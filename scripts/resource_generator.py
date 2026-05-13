@@ -116,12 +116,24 @@ def _generate_request_body(params, fixed_values, method, var_prefix, is_async):
 
 
 def _generate_execution(cmd_config, var_prefix, subdomain, path_prefix, timeout_expr, body_var):  # noqa: PLR0913
-    """Emit Go code for request execution (sync/async/paginated/wait)."""
+    """Emit Go code for request execution (sync/async/paginated/wait/no_content)."""
     lines = []
     is_async = cmd_config.get("async", False)
     is_paginated = cmd_config.get("paginated", False)
     has_wait = cmd_config.get("wait", False)
+    is_no_content = cmd_config.get("no_content", False)
     spinner_text = cmd_config.get("spinner_text", "Processing...")
+
+    if is_no_content:
+        method = cmd_config.get("_method_upper", "GET")
+        done_message = cmd_config.get("done_message", "Done.")
+        lines.append(f"\t\ttimeout := resolveTimeout(cmd, {timeout_expr})")
+        lines.append(f'\t\tif err := executeRequestNoContent(cmd, "{method}", requestURL, {body_var}, apiKey, timeout, "{spinner_text}"); err != nil {{')
+        lines.append("\t\t\treturn err")
+        lines.append("\t\t}")
+        lines.append(f'\t\tfmt.Fprintln(cli.InfoWriterErr(cmd), "{done_message}")')
+        lines.append("\t\treturn nil")
+        return lines
 
     lines.append(f"\t\ttimeout := resolveTimeout(cmd, {timeout_expr})")
     if is_async and is_paginated:
@@ -173,6 +185,7 @@ def _generate_execution(cmd_config, var_prefix, subdomain, path_prefix, timeout_
 def _generate_init_flags(params, cmd_config, cmd_var, var_prefix):
     """Emit Go code for flag registration in init()."""
     lines = []
+    secure_params = set(cmd_config.get("secure_input", []))
     for param in params:
         if param["in"] == "path":
             continue
@@ -180,6 +193,8 @@ def _generate_init_flags(params, cmd_config, cmd_var, var_prefix):
         flag_func = go_flag_func(param)
         flag_name = param["cli_flag"]
         desc = param["description"].replace('"', '\\"')
+        if param["name"] in secure_params:
+            desc += " (leave empty for secure prompt)"
         zero = go_zero_value(param)
         lines.append(f'\t{cmd_var}.Flags().{flag_func}(&{var_name}, "{flag_name}", {zero}, "{desc}")')
 
@@ -189,6 +204,8 @@ def _generate_init_flags(params, cmd_config, cmd_var, var_prefix):
         flag_func = go_flag_func(param)
         flag_name = param["cli_flag"]
         desc = param["description"].replace('"', '\\"')
+        if param["name"] in secure_params:
+            desc += " (leave empty for secure prompt)"
         zero = go_zero_value(param)
         lines.append(f'\t{cmd_var}.Flags().{flag_func}(&{var_name}, "{flag_name}", {zero}, "{desc}")')
 
@@ -203,7 +220,7 @@ def _generate_init_flags(params, cmd_config, cmd_var, var_prefix):
         lines.append(f'\t{cmd_var}.Flags().IntVar(&{var_prefix}Limit, "limit", 0, "Maximum number of data rows to return")')
 
     for param in params:
-        if param["required"]:
+        if param["required"] and param["name"] not in secure_params:
             flag_name = param["cli_flag"]
             lines.append(f'\t_ = {cmd_var}.MarkFlagRequired("{flag_name}")')
 
@@ -227,11 +244,14 @@ def generate_resource_file(resource_name, resource_config, spec, servers):
     lines.append('\t"encoding/json"')
     lines.append('\t"fmt"')
     lines.append('\t"net/url"')
+    lines.append('\t"os"')
     lines.append('\t"strings"')
     lines.append('\t"time"')
     lines.append("")
     lines.append('\t"github.com/spf13/cobra"')
+    lines.append('\t"golang.org/x/term"')
     lines.append("")
+    lines.append('\t"github.com/supermetrics-public/supermetrics-cli/internal/cli"')
     lines.append('\t"github.com/supermetrics-public/supermetrics-cli/internal/exitcode"')
     lines.append('\t"github.com/supermetrics-public/supermetrics-cli/internal/httpclient"')
     lines.append(")")
@@ -284,9 +304,10 @@ def generate_resource_file(resource_name, resource_config, spec, servers):
         lines.append("")
 
         # Required param validation
+        secure_params = set(cmd_config.get("secure_input", []))
         required_string_params = [
             p for p in params
-            if p["required"] and go_flag_type(p) == "string"
+            if p["required"] and go_flag_type(p) == "string" and p["name"] not in secure_params
         ]
         for param in required_string_params:
             var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
@@ -296,6 +317,23 @@ def generate_resource_file(resource_name, resource_config, spec, servers):
             lines.append("\t\t}")
         if required_string_params:
             lines.append("")
+
+        # Secure input prompting (before URL building, after param validation)
+        for param in params:
+            if param["name"] in secure_params:
+                var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
+                flag_name = param["cli_flag"]
+                lines.append(f'\t\tif {var_name} == "" {{')
+                lines.append(f'\t\t\tval, err := readSecureInput(cmd, "{flag_name}")')
+                lines.append(f'\t\t\tif err != nil {{')
+                lines.append(f'\t\t\t\treturn err')
+                lines.append(f'\t\t\t}}')
+                lines.append(f'\t\t\tif val == "" {{')
+                lines.append(f'\t\t\t\treturn exitcode.Wrap(fmt.Errorf("--{flag_name} is required (provide via flag or stdin)"), exitcode.Usage)')
+                lines.append(f'\t\t\t}}')
+                lines.append(f'\t\t\t{var_name} = val')
+                lines.append(f'\t\t}}')
+                lines.append('')
 
         # URL building
         lines.extend(_generate_url_building(params, fixed_values, var_prefix, subdomain, path_prefix, path))

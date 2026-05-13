@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/supermetrics-public/supermetrics-cli/internal/auth"
+	"github.com/supermetrics-public/supermetrics-cli/internal/cli"
 	"github.com/supermetrics-public/supermetrics-cli/internal/config"
 )
 
@@ -19,7 +20,7 @@ var loginCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		showStatus, _ := cmd.Flags().GetBool("status")
 		if showStatus {
-			return printLoginStatus(infoWriter())
+			return printLoginStatus(cli.InfoWriter(cmd))
 		}
 
 		domain := getDomain()
@@ -29,7 +30,7 @@ var loginCmd = &cobra.Command{
 			return err
 		}
 
-		token, err := auth.Login(context.Background(), domain, oauthCfg, infoWriter())
+		token, err := auth.Login(context.Background(), domain, oauthCfg, cli.InfoWriter(cmd))
 		if err != nil {
 			return err
 		}
@@ -50,7 +51,7 @@ var loginCmd = &cobra.Command{
 			return fmt.Errorf("failed to save credentials: %w", err)
 		}
 
-		fmt.Fprintf(infoWriter(), "Logged in successfully. Token expires in %s and will be refreshed automatically.\n", formatDuration(time.Until(token.Expiry())))
+		fmt.Fprintf(cli.InfoWriter(cmd), "Logged in successfully. Token expires in %s and will be refreshed automatically.\n", formatDuration(time.Until(token.Expiry())))
 		return nil
 	},
 }
@@ -59,7 +60,7 @@ var logoutCmd = &cobra.Command{
 	Use:   "logout",
 	Short: "Log out and revoke stored OAuth tokens",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		w := infoWriter()
+		w := cli.InfoWriter(cmd)
 
 		cfg, err := config.Load()
 		if err != nil {
@@ -81,7 +82,7 @@ var logoutCmd = &cobra.Command{
 		oauthCfg, _ := auth.LoadOAuthConfig()
 		revokeErr := auth.Revoke(context.Background(), domain, profile.AccessToken, oauthCfg)
 		if revokeErr != nil {
-			fmt.Fprintf(infoWriterErr(), "Warning: failed to revoke token: %v\n", revokeErr)
+			fmt.Fprintf(cli.InfoWriterErr(cmd), "Warning: failed to revoke token: %v\n", revokeErr)
 		}
 
 		profile.ClearOAuthTokens()

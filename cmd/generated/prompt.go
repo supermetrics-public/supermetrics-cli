@@ -4,10 +4,13 @@ package generated
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 // cleanZeroValues removes zero-value entries from a map, used for optional JSON query parameters.
@@ -38,6 +41,18 @@ func cleanZeroValues(params map[string]any) {
 	}
 }
 
+var (
+	stdinReader     *bufio.Reader
+	stdinReaderOnce sync.Once
+)
+
+func getStdinReader() *bufio.Reader {
+	stdinReaderOnce.Do(func() {
+		stdinReader = bufio.NewReader(os.Stdin)
+	})
+	return stdinReader
+}
+
 // confirmAction prompts the user for confirmation before a destructive action.
 // Skipped when --yes flag is set or stdin is not a terminal.
 func confirmAction(cmd *cobra.Command, message string) error {
@@ -49,7 +64,7 @@ func confirmAction(cmd *cobra.Command, message string) error {
 		return nil
 	}
 	fmt.Fprintf(cmd.ErrOrStderr(), "%s [y/N]: ", message)
-	answer, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	answer, err := getStdinReader().ReadString('\n')
 	if err != nil {
 		return fmt.Errorf("cancelled")
 	}
@@ -58,4 +73,23 @@ func confirmAction(cmd *cobra.Command, message string) error {
 		return fmt.Errorf("cancelled")
 	}
 	return nil
+}
+
+// readSecureInput reads a value from the user, masking input when stdin is a terminal.
+func readSecureInput(cmd *cobra.Command, prompt string) (string, error) {
+	w := cmd.ErrOrStderr()
+	if isTerminal(os.Stdin) {
+		fmt.Fprintf(w, "%s: ", prompt)
+		raw, err := term.ReadPassword(int(os.Stdin.Fd()))
+		if err != nil {
+			return "", fmt.Errorf("failed to read input: %w", err)
+		}
+		fmt.Fprintln(w)
+		return string(raw), nil
+	}
+	line, err := getStdinReader().ReadString('\n')
+	if err != nil && err != io.EOF {
+		return "", fmt.Errorf("failed to read from stdin: %w", err)
+	}
+	return strings.TrimRight(line, "\n\r"), nil
 }

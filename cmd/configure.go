@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/supermetrics-public/supermetrics-cli/internal/cli"
 	"github.com/supermetrics-public/supermetrics-cli/internal/config"
 	"github.com/supermetrics-public/supermetrics-cli/internal/exitcode"
 )
@@ -62,9 +63,9 @@ var configureCmd = &cobra.Command{
 
 		p, _ := config.Path()
 		if profileName != config.DefaultProfile {
-			fmt.Fprintf(infoWriter(), "Configuration saved to %s (profile: %s)\n", p, profileName)
+			fmt.Fprintf(cli.InfoWriter(cmd), "Configuration saved to %s (profile: %s)\n", p, profileName)
 		} else {
-			fmt.Fprintf(infoWriter(), "Configuration saved to %s\n", p)
+			fmt.Fprintf(cli.InfoWriter(cmd), "Configuration saved to %s\n", p)
 		}
 		return nil
 	},
