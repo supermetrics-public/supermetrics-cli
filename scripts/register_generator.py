@@ -654,7 +654,7 @@ def _gen_prompt_go():
     lines.append("\t\treturn string(raw), nil")
     lines.append("\t}")
     lines.append("\tline, err := getStdinReader().ReadString('\\n')")
-    lines.append('\tif err != nil && err != io.EOF {')
+    lines.append("\tif err != nil && err != io.EOF {")
     lines.append('\t\treturn "", fmt.Errorf("failed to read from stdin: %w", err)')
     lines.append("\t}")
     lines.append('\treturn strings.TrimRight(line, "\\n\\r"), nil')

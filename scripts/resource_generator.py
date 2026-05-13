@@ -325,15 +325,15 @@ def generate_resource_file(resource_name, resource_config, spec, servers):
                 flag_name = param["cli_flag"]
                 lines.append(f'\t\tif {var_name} == "" {{')
                 lines.append(f'\t\t\tval, err := readSecureInput(cmd, "{flag_name}")')
-                lines.append(f'\t\t\tif err != nil {{')
-                lines.append(f'\t\t\t\treturn err')
-                lines.append(f'\t\t\t}}')
-                lines.append(f'\t\t\tif val == "" {{')
+                lines.append("\t\t\tif err != nil {")
+                lines.append("\t\t\t\treturn err")
+                lines.append("\t\t\t}")
+                lines.append('\t\t\tif val == "" {')
                 lines.append(f'\t\t\t\treturn exitcode.Wrap(fmt.Errorf("--{flag_name} is required (provide via flag or stdin)"), exitcode.Usage)')
-                lines.append(f'\t\t\t}}')
-                lines.append(f'\t\t\t{var_name} = val')
-                lines.append(f'\t\t}}')
-                lines.append('')
+                lines.append("\t\t\t}")
+                lines.append(f"\t\t\t{var_name} = val")
+                lines.append("\t\t}")
+                lines.append("")
 
         # URL building
         lines.extend(_generate_url_building(params, fixed_values, var_prefix, subdomain, path_prefix, path))
