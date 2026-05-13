@@ -64,8 +64,11 @@ def extract_params(spec, operation):
     if "$ref" in body:
         body = resolve_ref(spec, body["$ref"])
 
-    content = body.get("content", {}).get("application/json", {})
-    body_schema = content.get("schema", {})
+    body_content = body.get("content", {})
+
+    # JSON body parameters
+    json_content = body_content.get("application/json", {})
+    body_schema = json_content.get("schema", {})
     if "$ref" in body_schema:
         body_schema = resolve_ref(spec, body_schema["$ref"])
 
@@ -80,6 +83,29 @@ def extract_params(spec, operation):
             "in": "body",
             "required": prop_name in required_list,
             "description": prop_schema.get("description", ""),
+            "type": prop_schema.get("type", "string"),
+            "format": prop_schema.get("format", ""),
+        }
+        params.append(p)
+
+    # Multipart form-data parameters (file uploads)
+    multipart_content = body_content.get("multipart/form-data", {})
+    multipart_schema = multipart_content.get("schema", {})
+    if "$ref" in multipart_schema:
+        multipart_schema = resolve_ref(spec, multipart_schema["$ref"])
+
+    for prop_name, prop_schema in multipart_schema.get("properties", {}).items():
+        if "$ref" in prop_schema:
+            prop_schema = resolve_ref(spec, prop_schema["$ref"])  # noqa: PLW2901
+
+        required_list = multipart_schema.get("required", [])
+        is_file = prop_schema.get("format") == "binary"
+        p = {
+            "name": prop_name,
+            "cli_flag": "file" if is_file else snake_to_kebab(prop_name),
+            "in": "file" if is_file else "form_field",
+            "required": prop_name in required_list,
+            "description": "" if is_file else prop_schema.get("description", ""),
             "type": prop_schema.get("type", "string"),
             "format": prop_schema.get("format", ""),
         }

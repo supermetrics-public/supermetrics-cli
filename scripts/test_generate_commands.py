@@ -262,6 +262,84 @@ class TestExtractParams(unittest.TestCase):
             self.assertEqual(p["in"], "body")
 
 
+class TestExtractParamsMultipart(unittest.TestCase):
+    def test_multipart_file_param(self):
+        spec = {}
+        operation = {
+            "requestBody": {
+                "content": {
+                    "multipart/form-data": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "logo": {"type": "string", "format": "binary", "description": "Logo file"}
+                            },
+                            "required": ["logo"],
+                        }
+                    }
+                }
+            }
+        }
+        params = extract_params(spec, operation)
+        self.assertEqual(len(params), 1)
+        self.assertEqual(params[0]["name"], "logo")
+        self.assertEqual(params[0]["in"], "file")
+        self.assertEqual(params[0]["cli_flag"], "file")
+        self.assertEqual(params[0]["description"], "")
+        self.assertTrue(params[0]["required"])
+        self.assertEqual(params[0]["format"], "binary")
+
+    def test_multipart_form_field_param(self):
+        spec = {}
+        operation = {
+            "requestBody": {
+                "content": {
+                    "multipart/form-data": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "description": {"type": "string", "description": "File description"}
+                            },
+                        }
+                    }
+                }
+            }
+        }
+        params = extract_params(spec, operation)
+        self.assertEqual(len(params), 1)
+        self.assertEqual(params[0]["name"], "description")
+        self.assertEqual(params[0]["in"], "form_field")
+        self.assertFalse(params[0]["required"])
+
+    def test_multipart_mixed_params(self):
+        spec = {}
+        operation = {
+            "parameters": [
+                {"name": "team_id", "in": "path", "required": True, "schema": {"type": "integer"}},
+            ],
+            "requestBody": {
+                "content": {
+                    "multipart/form-data": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "file": {"type": "string", "format": "binary", "description": "Upload file"},
+                                "title": {"type": "string", "description": "File title"},
+                            },
+                            "required": ["file"],
+                        }
+                    }
+                }
+            },
+        }
+        params = extract_params(spec, operation)
+        self.assertEqual(len(params), 3)
+        by_name = {p["name"]: p for p in params}
+        self.assertEqual(by_name["team_id"]["in"], "path")
+        self.assertEqual(by_name["file"]["in"], "file")
+        self.assertEqual(by_name["title"]["in"], "form_field")
+
+
 class TestGenerateRegisterFiles(unittest.TestCase):
     def _all_content(self, resources):
         """Join all generated file contents for assertion convenience."""
@@ -337,6 +415,104 @@ class TestGenerateRegisterFiles(unittest.TestCase):
             if "resolveTimeout" in content:
                 break
         self.assertIn("resolveTimeout(cmd,", content)
+
+    def test_contains_multipart_helpers(self):
+        files = generate_register_files({"queries": {}})
+        content = files["request.go"]
+        self.assertIn("buildMultipartStream", content)
+        self.assertIn("executeMultipartRequest", content)
+        self.assertIn("resolveFileInput", content)
+
+    def test_execute_request_signatures(self):
+        files = generate_register_files({"queries": {}})
+        content = files["request.go"]
+        # doRequest has contentType (no getBody)
+        self.assertIn("func doRequest(cmd *cobra.Command, method, url string, body io.Reader, contentType, apiKey string", content)
+        # executeRequest and executeRequestNoContent keep original signatures (no contentType)
+        self.assertIn("func executeRequest(cmd *cobra.Command, method, url string, body io.Reader, apiKey string", content)
+        self.assertIn("func executeRequestNoContent(cmd *cobra.Command, method, url string, body io.Reader, apiKey string", content)
+        # executeMultipartRequest has contentType (no getBody)
+        self.assertIn("func executeMultipartRequest(cmd *cobra.Command, method, url string, body io.Reader, contentType, apiKey string", content)
+        # executeMultipartRequestNoContent has contentType (no getBody)
+        self.assertIn("func executeMultipartRequestNoContent(cmd *cobra.Command, method, url string, body io.Reader, contentType, apiKey string", content)
+
+
+class TestMultipartResourceGeneration(unittest.TestCase):
+    """Test that generate_resource_file produces correct ordering for multipart commands."""
+
+    def _generate_multipart_resource(self, *, dry_run=False, confirm=""):
+        spec = {
+            "servers": [{"url": "https://api.supermetrics.com/v2"}],
+            "paths": {
+                "/teams/{team_id}/logos": {
+                    "post": {
+                        "operationId": "uploadLogo",
+                        "parameters": [
+                            {"name": "team_id", "in": "path", "required": True, "schema": {"type": "integer"}},
+                        ],
+                        "requestBody": {
+                            "content": {
+                                "multipart/form-data": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "logo": {"type": "string", "format": "binary"},
+                                            "title": {"type": "string", "description": "Logo title"},
+                                        },
+                                        "required": ["logo"],
+                                    }
+                                }
+                            }
+                        },
+                    }
+                }
+            },
+        }
+        config = {
+            "description": "Logo management",
+            "commands": {
+                "upload": {
+                    "operation_id": "uploadLogo",
+                    "description": "Upload a logo",
+                    "dry_run": dry_run,
+                    "confirm": confirm,
+                },
+            },
+        }
+        servers = spec["servers"]
+        return generate_resource_file("logos", config, spec, servers)
+
+    def test_multipart_stream_after_dry_run(self):
+        content = self._generate_multipart_resource(dry_run=True)
+        dry_run_pos = content.index("dry-run")
+        stream_pos = content.index("buildMultipartStream")
+        self.assertGreater(stream_pos, dry_run_pos, "buildMultipartStream must appear after dry-run check")
+
+    def test_multipart_stream_after_confirm(self):
+        content = self._generate_multipart_resource(confirm="Upload logo for team {team_id}?")
+        confirm_pos = content.index("confirmAction")
+        stream_pos = content.index("buildMultipartStream")
+        self.assertGreater(stream_pos, confirm_pos, "buildMultipartStream must appear after confirmAction")
+
+    def test_resolve_file_input_before_dry_run(self):
+        content = self._generate_multipart_resource(dry_run=True)
+        resolve_pos = content.index("resolveFileInput")
+        dry_run_pos = content.index("dry-run")
+        self.assertLess(resolve_pos, dry_run_pos, "resolveFileInput must appear before dry-run check")
+
+    def test_multipart_uses_execute_multipart_request(self):
+        content = self._generate_multipart_resource()
+        self.assertIn("executeMultipartRequest", content)
+        self.assertNotIn("executeRequest(cmd", content)
+
+    def test_multipart_has_file_flag(self):
+        content = self._generate_multipart_resource()
+        self.assertIn('"file"', content)
+        self.assertIn("resolveFileInput", content)
+
+    def test_multipart_form_field_conditional(self):
+        content = self._generate_multipart_resource()
+        self.assertIn('formFields["title"]', content)
 
 
 if __name__ == "__main__":

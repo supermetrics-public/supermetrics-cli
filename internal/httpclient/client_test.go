@@ -99,6 +99,43 @@ func TestDo_PostWithBody(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestDo_ContentTypeOverride(t *testing.T) {
+	t.Run("custom ContentType is sent", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "application/x-www-form-urlencoded", r.Header.Get("Content-Type"))
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{}`))
+		}))
+		defer srv.Close()
+
+		_, err := Do(context.Background(), Request{
+			Method:      "POST",
+			URL:         srv.URL,
+			Body:        strings.NewReader(`key=value`),
+			APIKey:      "key",
+			ContentType: "application/x-www-form-urlencoded",
+		})
+		require.NoError(t, err)
+	})
+
+	t.Run("empty ContentType defaults to application/json", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{}`))
+		}))
+		defer srv.Close()
+
+		_, err := Do(context.Background(), Request{
+			Method: "POST",
+			URL:    srv.URL,
+			Body:   strings.NewReader(`{"key":"value"}`),
+			APIKey: "key",
+		})
+		require.NoError(t, err)
+	})
+}
+
 func TestDo_ServerError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)

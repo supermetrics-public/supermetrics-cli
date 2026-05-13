@@ -23,6 +23,7 @@ type Request struct {
 	APIKey       string
 	Timeout      time.Duration
 	Verbose      bool
+	ContentType  string       // optional; overrides default "application/json" (e.g. for multipart/form-data)
 	Client       *http.Client // optional; defaults to http.DefaultClient
 	Middlewares  []Middleware // optional; applied in order (first is outermost)
 	DisableRetry bool         // optional; disables automatic retry on transient errors
@@ -54,7 +55,11 @@ func Do(ctx context.Context, r Request) (*Response, error) {
 	req.Header.Set("Authorization", "Bearer "+r.APIKey)
 	req.Header.Set("Accept", "application/json")
 	if r.Body != nil {
-		req.Header.Set("Content-Type", "application/json")
+		ct := "application/json"
+		if r.ContentType != "" {
+			ct = r.ContentType
+		}
+		req.Header.Set("Content-Type", ct)
 	}
 
 	if r.Verbose {
