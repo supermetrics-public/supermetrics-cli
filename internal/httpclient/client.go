@@ -139,6 +139,9 @@ func (r *Response) ParseJSONWithMeta() (data any, meta map[string]any, err error
 
 // parseEnvelope is the shared implementation for ParseJSON and ParseJSONWithMeta.
 func (r *Response) parseEnvelope() (any, map[string]any, error) {
+	if len(r.Body) == 0 {
+		return nil, nil, nil
+	}
 	var raw any
 	if err := json.Unmarshal(r.Body, &raw); err != nil {
 		return nil, nil, fmt.Errorf("failed to parse response: %w", err)

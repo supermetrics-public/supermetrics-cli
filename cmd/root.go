@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"os"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/supermetrics-public/supermetrics-cli/cmd/generated"
 	"github.com/supermetrics-public/supermetrics-cli/internal/auth"
 	"github.com/supermetrics-public/supermetrics-cli/internal/buildcfg"
+	"github.com/supermetrics-public/supermetrics-cli/internal/cli"
 	"github.com/supermetrics-public/supermetrics-cli/internal/config"
 	"github.com/supermetrics-public/supermetrics-cli/internal/exitcode"
 	"github.com/supermetrics-public/supermetrics-cli/internal/httpclient"
@@ -29,7 +29,6 @@ var (
 	flagNoColor bool
 	flagFlatten bool
 	flagNoRetry bool
-	flagQuiet   bool
 	flagFields  string
 	flagProfile string
 	flagTimeout string
@@ -55,7 +54,7 @@ Get started:
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Print update hint from previous background check
-		update.PrintUpdateHint(infoWriterErr(), buildcfg.Version)
+		update.PrintUpdateHint(cli.InfoWriterErr(cmd), buildcfg.Version)
 
 		// Spawn non-blocking background check if interval has elapsed
 		if update.ShouldCheck() {
@@ -72,7 +71,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&flagNoColor, "no-color", false, "Disable colored output")
 	rootCmd.PersistentFlags().BoolVar(&flagFlatten, "flatten", false, "Expand nested data in table output (CSV always flattens)")
 	rootCmd.PersistentFlags().BoolVar(&flagNoRetry, "no-retry", false, "Disable automatic retry on transient errors")
-	rootCmd.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "Suppress informational output")
+	rootCmd.PersistentFlags().BoolP("quiet", "q", false, "Suppress informational output")
 	rootCmd.PersistentFlags().StringVar(&flagFields, "fields", "", "Comma-separated list of fields to include in output (e.g. id,status,error.message)")
 	rootCmd.PersistentFlags().StringVar(&flagProfile, "profile", "", "Named profile to use for credentials")
 	rootCmd.PersistentFlags().StringVar(&flagTimeout, "timeout", "", "Override request timeout (e.g., 30s, 5m, 1h)")
@@ -211,33 +210,4 @@ func getDomain() string {
 // IsVerbose returns whether verbose mode is enabled.
 func IsVerbose() bool {
 	return flagVerbose
-}
-
-// isQuiet returns whether quiet mode is enabled via flag or env var.
-func isQuiet() bool {
-	if flagQuiet {
-		return true
-	}
-	if val, ok := os.LookupEnv("SUPERMETRICS_QUIET"); ok && val != "" && val != "0" {
-		return true
-	}
-	return false
-}
-
-// infoWriter returns a writer for informational stdout messages.
-// Returns io.Discard in quiet mode.
-func infoWriter() io.Writer {
-	if isQuiet() {
-		return io.Discard
-	}
-	return os.Stdout
-}
-
-// infoWriterErr returns a writer for informational stderr messages.
-// Returns io.Discard in quiet mode.
-func infoWriterErr() io.Writer {
-	if isQuiet() {
-		return io.Discard
-	}
-	return os.Stderr
 }

@@ -3,11 +3,13 @@ package generated
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1530,4 +1532,122 @@ func TestResolveTimeout_NoFlag(t *testing.T) {
 
 	got := resolveTimeout(cmd, 42*time.Second)
 	assert.Equal(t, 42*time.Second, got)
+}
+
+func resetStdinReader() {
+	stdinReaderOnce = sync.Once{}
+	stdinReader = nil
+}
+
+func TestReadSecureInput_Pipe(t *testing.T) {
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	_, _ = w.WriteString("mysecret\n")
+	w.Close()
+
+	old := os.Stdin
+	resetStdinReader()
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = old; resetStdinReader() })
+
+	cmd := &cobra.Command{Use: "test"}
+	val, err := readSecureInput(cmd, "secret-value")
+	require.NoError(t, err)
+	assert.Equal(t, "mysecret", val)
+}
+
+func TestReadSecureInput_PipeNoNewline(t *testing.T) {
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	_, _ = w.WriteString("mysecret")
+	w.Close()
+
+	old := os.Stdin
+	resetStdinReader()
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = old; resetStdinReader() })
+
+	cmd := &cobra.Command{Use: "test"}
+	val, err := readSecureInput(cmd, "secret-value")
+	require.NoError(t, err)
+	assert.Equal(t, "mysecret", val)
+}
+
+func TestReadSecureInput_PipeEmpty(t *testing.T) {
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	w.Close()
+
+	old := os.Stdin
+	resetStdinReader()
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = old; resetStdinReader() })
+
+	cmd := &cobra.Command{Use: "test"}
+	val, err := readSecureInput(cmd, "secret-value")
+	require.NoError(t, err)
+	assert.Equal(t, "", val)
+}
+
+func TestReadSecureInput_PipePromptToStderr(t *testing.T) {
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	_, _ = w.WriteString("val\n")
+	w.Close()
+
+	old := os.Stdin
+	resetStdinReader()
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = old; resetStdinReader() })
+
+	var stderr bytes.Buffer
+	cmd := &cobra.Command{Use: "test"}
+	cmd.SetErr(&stderr)
+
+	_, err = readSecureInput(cmd, "secret-value")
+	require.NoError(t, err)
+	assert.Empty(t, stderr.String(), "pipe mode should not print prompt")
+}
+
+func TestExecuteRequestNoContent_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	httpClient = srv.Client()
+	t.Cleanup(func() { httpClient = nil })
+
+	root := &cobra.Command{Use: "root"}
+	root.PersistentFlags().Bool("verbose", false, "")
+	root.PersistentFlags().Bool("no-retry", true, "")
+	root.PersistentFlags().Bool("quiet", false, "")
+	cmd := &cobra.Command{Use: "test"}
+	root.AddCommand(cmd)
+
+	err := executeRequestNoContent(cmd, "DELETE", srv.URL+"/resource/1", nil, "test-key", 10*time.Second, "Deleting...")
+	assert.NoError(t, err)
+}
+
+func TestExecuteRequestNoContent_Error(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, `{"meta":{"request_id":"req1"},"error":{"code":"INVALID","message":"Bad input"}}`)
+	}))
+	defer srv.Close()
+
+	httpClient = srv.Client()
+	t.Cleanup(func() { httpClient = nil })
+
+	root := &cobra.Command{Use: "root"}
+	root.PersistentFlags().Bool("verbose", false, "")
+	root.PersistentFlags().Bool("no-retry", true, "")
+	root.PersistentFlags().Bool("quiet", false, "")
+	cmd := &cobra.Command{Use: "test"}
+	root.AddCommand(cmd)
+
+	err := executeRequestNoContent(cmd, "DELETE", srv.URL+"/resource/1", nil, "test-key", 10*time.Second, "Deleting...")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Bad input")
 }
