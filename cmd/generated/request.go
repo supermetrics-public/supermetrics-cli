@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
 
+	"github.com/supermetrics-public/supermetrics-cli/internal/exitcode"
 	"github.com/supermetrics-public/supermetrics-cli/internal/httpclient"
 	"github.com/supermetrics-public/supermetrics-cli/internal/output"
 )
@@ -49,9 +52,13 @@ func shouldUseColor(cmd *cobra.Command) bool {
 }
 
 // doRequest sends an HTTP request with spinner, returning the raw response.
-func doRequest(cmd *cobra.Command, method, url string, body io.Reader, apiKey string, timeout time.Duration, spinnerText string) (*httpclient.Response, error) {
+// contentType overrides the default application/json when non-empty (e.g. for multipart/form-data).
+func doRequest(cmd *cobra.Command, method, url string, body io.Reader, contentType, apiKey string, timeout time.Duration, spinnerText string) (*httpclient.Response, error) {
 	verbose, _ := cmd.Root().PersistentFlags().GetBool("verbose")
 	noRetry, _ := cmd.Root().PersistentFlags().GetBool("no-retry")
+	if contentType != "" {
+		noRetry = true
+	}
 	quiet, _ := cmd.Root().PersistentFlags().GetBool("quiet")
 
 	if isTerminal(os.Stderr) && !quiet && !verbose {
@@ -88,6 +95,7 @@ func doRequest(cmd *cobra.Command, method, url string, body io.Reader, apiKey st
 		Method:       method,
 		URL:          url,
 		Body:         body,
+		ContentType:  contentType,
 		APIKey:       apiKey,
 		Timeout:      timeout,
 		Verbose:      verbose,
@@ -98,7 +106,7 @@ func doRequest(cmd *cobra.Command, method, url string, body io.Reader, apiKey st
 
 // executeRequest sends an HTTP request and returns the parsed JSON response.
 func executeRequest(cmd *cobra.Command, method, url string, body io.Reader, apiKey string, timeout time.Duration, spinnerText string) (any, error) {
-	resp, err := doRequest(cmd, method, url, body, apiKey, timeout, spinnerText)
+	resp, err := doRequest(cmd, method, url, body, "", apiKey, timeout, spinnerText)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +115,22 @@ func executeRequest(cmd *cobra.Command, method, url string, body io.Reader, apiK
 
 // executeRequestNoContent sends an HTTP request that returns no content body.
 func executeRequestNoContent(cmd *cobra.Command, method, url string, body io.Reader, apiKey string, timeout time.Duration, spinnerText string) error {
-	_, err := doRequest(cmd, method, url, body, apiKey, timeout, spinnerText)
+	_, err := doRequest(cmd, method, url, body, "", apiKey, timeout, spinnerText)
+	return err
+}
+
+// executeMultipartRequest sends a multipart/form-data request and returns the parsed JSON response.
+func executeMultipartRequest(cmd *cobra.Command, method, url string, body io.Reader, contentType, apiKey string, timeout time.Duration, spinnerText string) (any, error) {
+	resp, err := doRequest(cmd, method, url, body, contentType, apiKey, timeout, spinnerText)
+	if err != nil {
+		return nil, err
+	}
+	return resp.ParseJSON()
+}
+
+// executeMultipartRequestNoContent sends a multipart/form-data request that returns no content body.
+func executeMultipartRequestNoContent(cmd *cobra.Command, method, url string, body io.Reader, contentType, apiKey string, timeout time.Duration, spinnerText string) error {
+	_, err := doRequest(cmd, method, url, body, contentType, apiKey, timeout, spinnerText)
 	return err
 }
 
@@ -121,6 +144,67 @@ func printResult(cmd *cobra.Command, result any) error {
 		fields = strings.Split(fieldsStr, ",")
 	}
 	return output.Print(cmd.OutOrStdout(), result, output.PrintOptions{Format: outputFormat, UseColor: shouldUseColor(cmd), Flatten: flatten, Fields: fields})
+}
+
+// buildMultipartStream creates a streaming multipart/form-data request body using io.Pipe.
+func buildMultipartStream(filePath, fieldName string, fields map[string]string) (io.Reader, string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to open file %s: %w", filePath, err)
+	}
+
+	pr, pw := io.Pipe()
+	writer := multipart.NewWriter(pw)
+	contentType := writer.FormDataContentType()
+
+	go func() {
+		var writeErr error
+		defer func() {
+			_ = file.Close()
+			if writeErr != nil {
+				_ = pw.CloseWithError(writeErr)
+			} else {
+				_ = pw.CloseWithError(writer.Close())
+			}
+		}()
+
+		for k, v := range fields {
+			if writeErr = writer.WriteField(k, v); writeErr != nil {
+				return
+			}
+		}
+
+		var part io.Writer
+		part, writeErr = writer.CreateFormFile(fieldName, filepath.Base(filePath))
+		if writeErr != nil {
+			return
+		}
+		_, writeErr = io.Copy(part, file)
+	}()
+
+	return pr, contentType, nil
+}
+
+// resolveFileInput returns the file path from the --file flag or reads stdin into a temp file.
+func resolveFileInput(filePath string) (string, func(), error) {
+	if filePath != "" {
+		return filePath, func() {}, nil
+	}
+	if isTerminal(os.Stdin) {
+		return "", func() {}, exitcode.Wrap(fmt.Errorf("provide a file path with --file or pipe data via stdin"), exitcode.Usage)
+	}
+	tmpFile, err := os.CreateTemp("", "supermetrics-upload-*")
+	if err != nil {
+		return "", func() {}, fmt.Errorf("failed to create temp file: %w", err)
+	}
+	if _, err := io.Copy(tmpFile, os.Stdin); err != nil {
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpFile.Name())
+		return "", func() {}, fmt.Errorf("failed to read stdin: %w", err)
+	}
+	_ = tmpFile.Close()
+	cleanup := func() { _ = os.Remove(tmpFile.Name()) }
+	return tmpFile.Name(), cleanup, nil
 }
 
 // dryRunRequest prints the request details without executing it.
