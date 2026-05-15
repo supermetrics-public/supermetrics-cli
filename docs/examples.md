@@ -1570,6 +1570,9 @@ supermetrics login-links close --yes
 
 ## Connector Builder
 
+Build custom connectors to pull data from any API into Supermetrics. See the
+[Connector Builder documentation](https://docs.supermetrics.com/docs/connector-builder) for full details.
+
 ### How do I manage connectors?
 
 ```bash

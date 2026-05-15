@@ -197,7 +197,7 @@ If no credentials are found, the CLI suggests running `supermetrics login` or `s
 | `queries`     | `execute`                                                  | Execute data queries against connected sources          |
 | `backfills`   | `create`, `get`, `get-latest`, `list-incomplete`, `cancel` | Manage Data Warehouse backfills                         |
 | `datasource`  | `get`                                                      | View data source configuration details                  |
-| `connector-builder` | `list`, `get`, `create`, `update`, `delete`          | Manage Connector Builder connectors                     |
+| `connector-builder` | `list`, `get`, `create`, `update`, `delete`          | Manage [Connector Builder](https://docs.supermetrics.com/docs/connector-builder) connectors |
 | `connector-builder-secrets` | `list`, `create`, `update`, `delete`          | Manage secrets for a connector                          |
 | `connector-builder-logs` | `list`, `get`                                    | View execution logs for a connector                     |
 | `connector-builder-logo` | `get`, `upload`                                   | Manage the logo for a connector                         |
