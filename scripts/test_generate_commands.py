@@ -515,5 +515,159 @@ class TestMultipartResourceGeneration(unittest.TestCase):
         self.assertIn('formFields["title"]', content)
 
 
+class TestObjectBodyParams(unittest.TestCase):
+    """Test that the generator correctly handles type: object body parameters."""
+
+    def _make_spec_and_config(self):
+        spec = {
+            "servers": [{"url": "https://api.supermetrics.com/v2"}],
+            "paths": {
+                "/widgets/{widget_id}": {
+                    "put": {
+                        "operationId": "updateWidget",
+                        "parameters": [
+                            {"name": "widget_id", "in": "path", "required": True, "schema": {"type": "string"}},
+                        ],
+                        "requestBody": {
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {"type": "string", "description": "Widget name"},
+                                            "connector": {"type": "object", "description": "Connector settings"},
+                                        },
+                                        "required": ["name", "connector"],
+                                    }
+                                }
+                            }
+                        },
+                    }
+                }
+            },
+        }
+        config = {
+            "description": "Widget management",
+            "commands": {
+                "update": {
+                    "operation_id": "updateWidget",
+                    "description": "Update a widget",
+                },
+            },
+        }
+        return spec, config
+
+    def test_object_body_param_generates_json_unmarshal(self):
+        spec, config = self._make_spec_and_config()
+        content = generate_resource_file("widgets", config, spec, spec["servers"])
+
+        # Object param must use json.Unmarshal, not direct assignment
+        self.assertIn("json.Unmarshal", content)
+        self.assertNotIn('"connector": flagWidgetsUpdateConnector,', content)
+
+        # Regular string param uses separate assignment (not map literal) when object params exist
+        self.assertIn('body["name"] = flagWidgetsUpdateName', content)
+
+    def test_object_body_param_error_message_uses_flag_name(self):
+        spec, config = self._make_spec_and_config()
+        content = generate_resource_file("widgets", config, spec, spec["servers"])
+
+        # Error message must reference the CLI flag name
+        self.assertIn("--connector must be a JSON object", content)
+
+    def test_no_object_params_unchanged(self):
+        spec = {
+            "servers": [{"url": "https://api.supermetrics.com/v2"}],
+            "paths": {
+                "/items": {
+                    "post": {
+                        "operationId": "createItem",
+                        "requestBody": {
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "title": {"type": "string", "description": "Item title"},
+                                            "count": {"type": "integer", "description": "Item count"},
+                                        },
+                                        "required": ["title", "count"],
+                                    }
+                                }
+                            }
+                        },
+                    }
+                }
+            },
+        }
+        config = {
+            "description": "Item management",
+            "commands": {
+                "create": {
+                    "operation_id": "createItem",
+                    "description": "Create an item",
+                },
+            },
+        }
+        content = generate_resource_file("items", config, spec, spec["servers"])
+
+        # No object params: must use map literal syntax
+        self.assertIn("body := map[string]any{", content)
+        self.assertNotIn("json.Unmarshal", content)
+
+
+class TestBooleanQueryParams(unittest.TestCase):
+    """Test that boolean query params generate the correct conditional set code."""
+
+    def _make_spec_and_config(self):
+        spec = {
+            "servers": [{"url": "https://api.supermetrics.com/v2"}],
+            "paths": {
+                "/reports": {
+                    "get": {
+                        "operationId": "listReports",
+                        "parameters": [
+                            {
+                                "name": "include_archived",
+                                "in": "query",
+                                "required": False,
+                                "description": "Include archived reports",
+                                "schema": {"type": "boolean"},
+                            },
+                        ],
+                    }
+                }
+            },
+        }
+        config = {
+            "description": "Report management",
+            "commands": {
+                "list": {
+                    "operation_id": "listReports",
+                    "description": "List reports",
+                },
+            },
+        }
+        return spec, config
+
+    def test_bool_query_param_generates_conditional_set(self):
+        spec, config = self._make_spec_and_config()
+        content = generate_resource_file("reports", config, spec, spec["servers"])
+
+        # Bool param must emit q.Set with "true" string value
+        self.assertIn('q.Set("include_archived", "true")', content)
+
+    def test_bool_query_param_not_set_when_false(self):
+        spec, config = self._make_spec_and_config()
+        content = generate_resource_file("reports", config, spec, spec["servers"])
+
+        # The set must be wrapped in an if-condition on the flag variable (not unconditional)
+        var_name = "flagReportsListIncludeArchived"
+        self.assertIn(f"if {var_name} {{", content)
+
+        # Must NOT set "false" unconditionally — only "true" inside the condition
+        self.assertNotIn('q.Set("include_archived", "false")', content)
+
+
 if __name__ == "__main__":
     unittest.main()

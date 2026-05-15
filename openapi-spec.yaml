@@ -26,6 +26,9 @@ servers:
   description: Global production public Supermetrics Data Warehouse Backfills API
     base path.
   x-internal: false
+- url: https://api.supermetrics.com/v1
+  description: Global production public Supermetrics Connector Builder API base path.
+  x-internal: false
 paths:
   /teams/{team_id}/datasource/{data_source_id}:
     get:
@@ -1115,6 +1118,538 @@ paths:
         maxLength: 50
         pattern: ^[A-Za-z0-9_-]+$
       description: Supermetrics login link ID
+  /teams/{team_id}/connector_builder/connectors:
+    get:
+      summary: List connectors
+      description: List all Connector Builder connectors for a team.
+      operationId: listConnectors
+      tags:
+      - Connector Builder
+      parameters:
+      - $ref: '#/components/parameters/TeamIdPathParam'
+      - name: include_configs
+        in: query
+        required: false
+        description: Include connector configurations in the response
+        schema:
+          type: boolean
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: Connectors retrieved successfully
+          headers:
+            Access-Control-Allow-Origin:
+              $ref: '#/components/headers/Access-Control-Allow-Origin'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    description: Total number of connectors
+                  connectors:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      summary: Create connector
+      description: Create a new Connector Builder connector. Optionally duplicate from
+        an existing connector by providing its identifier.
+      operationId: createConnector
+      tags:
+      - Connector Builder
+      parameters:
+      - $ref: '#/components/parameters/TeamIdPathParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - title
+              properties:
+                title:
+                  type: string
+                  maxLength: 255
+                  description: Name of the connector
+                description:
+                  type: string
+                  maxLength: 1000
+                  description: Description of the connector
+                connector_identifier:
+                  type: string
+                  maxLength: 255
+                  description: Identifier of an existing connector to duplicate from
+      security:
+      - BearerAuth: []
+      responses:
+        '201':
+          description: Connector created successfully
+          headers:
+            Access-Control-Allow-Origin:
+              $ref: '#/components/headers/Access-Control-Allow-Origin'
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /teams/{team_id}/connector_builder/connectors/{connector_identifier}:
+    get:
+      summary: Get connector
+      description: Get a single Connector Builder connector with its configuration.
+      operationId: getConnector
+      tags:
+      - Connector Builder
+      parameters:
+      - $ref: '#/components/parameters/TeamIdPathParam'
+      - $ref: '#/components/parameters/ConnectorIdentifierPathParam'
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: Connector retrieved successfully
+          headers:
+            Access-Control-Allow-Origin:
+              $ref: '#/components/headers/Access-Control-Allow-Origin'
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      summary: Update connector
+      description: Update a Connector Builder connector and its configuration.
+      operationId: updateConnector
+      tags:
+      - Connector Builder
+      parameters:
+      - $ref: '#/components/parameters/TeamIdPathParam'
+      - $ref: '#/components/parameters/ConnectorIdentifierPathParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - connector
+              - configuration
+              properties:
+                connector:
+                  type: object
+                  description: Connector metadata as JSON object with name and description
+                configuration:
+                  type: object
+                  description: Connector configuration as JSON object with id, version,
+                    and configuration_json
+      security:
+      - BearerAuth: []
+      responses:
+        '204':
+          description: Connector updated successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      summary: Delete connector
+      description: Soft-delete a Connector Builder connector.
+      operationId: deleteConnector
+      tags:
+      - Connector Builder
+      parameters:
+      - $ref: '#/components/parameters/TeamIdPathParam'
+      - $ref: '#/components/parameters/ConnectorIdentifierPathParam'
+      security:
+      - BearerAuth: []
+      responses:
+        '204':
+          description: Connector deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /teams/{team_id}/connector_builder/connectors/{connector_identifier}/secrets:
+    get:
+      summary: List secrets
+      description: List all secrets for a Connector Builder connector. Returns placeholder
+        names only, never secret values.
+      operationId: listConnectorSecrets
+      tags:
+      - Connector Builder Secrets
+      parameters:
+      - $ref: '#/components/parameters/TeamIdPathParam'
+      - $ref: '#/components/parameters/ConnectorIdentifierPathParam'
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: Secrets retrieved successfully
+          headers:
+            Access-Control-Allow-Origin:
+              $ref: '#/components/headers/Access-Control-Allow-Origin'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    description: Total number of secrets
+                  secrets:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        secret_placeholder:
+                          type: string
+                        secret_name:
+                          type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      summary: Create secret
+      description: Create a new secret for a Connector Builder connector. The secret
+        value is encrypted at rest.
+      operationId: createConnectorSecret
+      tags:
+      - Connector Builder Secrets
+      parameters:
+      - $ref: '#/components/parameters/TeamIdPathParam'
+      - $ref: '#/components/parameters/ConnectorIdentifierPathParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - secret_name
+              - secret_value
+              properties:
+                secret_name:
+                  type: string
+                  maxLength: 255
+                  description: Human-readable name for the secret
+                secret_value:
+                  type: string
+                  maxLength: 10000
+                  description: Plaintext secret value (encrypted at rest)
+      security:
+      - BearerAuth: []
+      responses:
+        '201':
+          description: Secret created successfully
+          headers:
+            Access-Control-Allow-Origin:
+              $ref: '#/components/headers/Access-Control-Allow-Origin'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  secrets:
+                    type: array
+                    items:
+                      type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Secret with this name already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /teams/{team_id}/connector_builder/connectors/{connector_identifier}/secrets/{secret_placeholder}:
+    put:
+      summary: Update secret
+      description: Update the value of an existing secret.
+      operationId: updateConnectorSecret
+      tags:
+      - Connector Builder Secrets
+      parameters:
+      - $ref: '#/components/parameters/TeamIdPathParam'
+      - $ref: '#/components/parameters/ConnectorIdentifierPathParam'
+      - $ref: '#/components/parameters/SecretPlaceholderPathParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - secret_value
+              properties:
+                secret_value:
+                  type: string
+                  maxLength: 10000
+                  description: New plaintext secret value (encrypted at rest)
+      security:
+      - BearerAuth: []
+      responses:
+        '204':
+          description: Secret updated successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      summary: Delete secret
+      description: Delete a secret from a Connector Builder connector.
+      operationId: deleteConnectorSecret
+      tags:
+      - Connector Builder Secrets
+      parameters:
+      - $ref: '#/components/parameters/TeamIdPathParam'
+      - $ref: '#/components/parameters/ConnectorIdentifierPathParam'
+      - $ref: '#/components/parameters/SecretPlaceholderPathParam'
+      security:
+      - BearerAuth: []
+      responses:
+        '204':
+          description: Secret deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /teams/{team_id}/connector_builder/connectors/{connector_identifier}/logs:
+    get:
+      summary: List connector logs
+      description: List execution logs for a Connector Builder connector. Uses cursor-based
+        pagination with the before parameter.
+      operationId: listConnectorLogs
+      tags:
+      - Connector Builder Logs
+      parameters:
+      - $ref: '#/components/parameters/TeamIdPathParam'
+      - $ref: '#/components/parameters/ConnectorIdentifierPathParam'
+      - name: limit
+        in: query
+        required: false
+        description: Maximum number of log entries to return (1-1000)
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 1000
+      - name: before
+        in: query
+        required: false
+        description: Return logs before this timestamp (ISO 8601 format, for cursor
+          pagination)
+        schema:
+          type: string
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: Logs retrieved successfully
+          headers:
+            Access-Control-Allow-Origin:
+              $ref: '#/components/headers/Access-Control-Allow-Origin'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  logs:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /teams/{team_id}/connector_builder/connectors/{connector_identifier}/logs/{log_id}:
+    get:
+      summary: Get log details
+      description: Get detailed information for a specific execution log entry.
+      operationId: getConnectorLog
+      tags:
+      - Connector Builder Logs
+      parameters:
+      - $ref: '#/components/parameters/TeamIdPathParam'
+      - $ref: '#/components/parameters/ConnectorIdentifierPathParam'
+      - $ref: '#/components/parameters/LogIdPathParam'
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: Log details retrieved successfully
+          headers:
+            Access-Control-Allow-Origin:
+              $ref: '#/components/headers/Access-Control-Allow-Origin'
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /teams/{team_id}/connector_builder/connectors/{connector_identifier}/logo:
+    get:
+      summary: Get connector logo
+      description: Get the logo URL for a Connector Builder connector.
+      operationId: getConnectorLogo
+      tags:
+      - Connector Builder
+      parameters:
+      - $ref: '#/components/parameters/TeamIdPathParam'
+      - $ref: '#/components/parameters/ConnectorIdentifierPathParam'
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: Logo URL retrieved successfully
+          headers:
+            Access-Control-Allow-Origin:
+              $ref: '#/components/headers/Access-Control-Allow-Origin'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  logo_url:
+                    type: string
+                    format: uri
+                    description: URL of the connector logo
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      summary: Upload connector logo
+      description: Upload a logo image for a Connector Builder connector. Max 5MB,
+        PNG/JPG/JPEG formats accepted.
+      operationId: uploadConnectorLogo
+      tags:
+      - Connector Builder
+      parameters:
+      - $ref: '#/components/parameters/TeamIdPathParam'
+      - $ref: '#/components/parameters/ConnectorIdentifierPathParam'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - logo
+              properties:
+                logo:
+                  type: string
+                  format: binary
+                  description: Logo image file (PNG, JPG, JPEG, max 5MB)
+      security:
+      - BearerAuth: []
+      responses:
+        '201':
+          description: Logo uploaded successfully
+          headers:
+            Access-Control-Allow-Origin:
+              $ref: '#/components/headers/Access-Control-Allow-Origin'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  logo_url:
+                    type: string
+                    format: uri
+                    description: URL of the uploaded logo
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          description: Logo file exceeds 5MB size limit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '415':
+          description: Unsupported logo format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 components:
   schemas:
     Backfill:
@@ -2267,6 +2802,22 @@ components:
               code: ACCESS_DENIED
               message: Access Denied
               description: You do not have permission to perform this operation.
+    NotFound:
+      description: Not Found - The requested resource could not be found.
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            meta:
+              request_id: 01892A4D-7586-7000-8000-000000000000
+            error:
+              code: NOT_FOUND
+              message: Not Found
+              description: The requested resource could not be found.
     InternalServerError:
       description: Internal Server Error - An error occurred on the server.
       headers:
@@ -2493,6 +3044,30 @@ components:
         format: int64
         minimum: 1
         maximum: 9223372036854775807
+    ConnectorIdentifierPathParam:
+      name: connector_identifier
+      in: path
+      required: true
+      description: Unique identifier of the connector
+      schema:
+        type: string
+        maxLength: 255
+    SecretPlaceholderPathParam:
+      name: secret_placeholder
+      in: path
+      required: true
+      description: Placeholder identifier of the secret
+      schema:
+        type: string
+        maxLength: 255
+    LogIdPathParam:
+      name: log_id
+      in: path
+      required: true
+      description: Unique identifier of the log entry
+      schema:
+        type: string
+        maxLength: 255
   headers:
     Access-Control-Allow-Origin:
       description: CORS header
