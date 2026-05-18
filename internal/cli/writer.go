@@ -24,7 +24,7 @@ func InfoWriter(cmd *cobra.Command) io.Writer {
 	if IsQuiet(cmd) {
 		return io.Discard
 	}
-	return os.Stdout
+	return cmd.OutOrStdout()
 }
 
 // InfoWriterErr returns a writer for informational stderr messages.
@@ -33,5 +33,5 @@ func InfoWriterErr(cmd *cobra.Command) io.Writer {
 	if IsQuiet(cmd) {
 		return io.Discard
 	}
-	return os.Stderr
+	return cmd.ErrOrStderr()
 }

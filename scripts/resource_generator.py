@@ -31,6 +31,8 @@ def _generate_flag_declarations(params, var_prefix, is_paginated):
         var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
         var_type = go_var_type(param)
         lines.append(f"var {var_name} {var_type}")
+        if param["in"] == "body" and param["type"] == "object":
+            lines.append(f"var {var_name}File string")
     if has_file:
         lines.append(f"var {_file_var_name(var_prefix)} string")
     if is_paginated:
@@ -130,13 +132,31 @@ def _generate_request_body(params, fixed_values, method, var_prefix, is_async):
         content_type_var = "contentType"
         multipart_info = {"field_name": file_param["name"], "file_var": "filePath"}
     elif has_body:
-        lines.append("\t\tbody := map[string]any{")
-        for param in body_params:
-            var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
-            lines.append(f'\t\t\t"{param["name"]}": {var_name},')
-        for fixed_name, fixed_val in fixed_values.items():
-            lines.append(f'\t\t\t"{fixed_name}": "{fixed_val}",')
-        lines.append("\t\t}")
+        object_params = [p for p in body_params if p["type"] == "object"]
+        simple_params = [p for p in body_params if p["type"] != "object"]
+        if object_params:
+            lines.append("\t\tbody := map[string]any{}")
+            for param in simple_params:
+                var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
+                lines.append(f'\t\tbody["{param["name"]}"] = {var_name}')
+            for param in object_params:
+                var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
+                flag_name = param["cli_flag"]
+                lines.append(f"\t\tvar {var_name}Parsed map[string]any")
+                lines.append(f"\t\tif err := json.Unmarshal([]byte({var_name}), &{var_name}Parsed); err != nil {{")
+                lines.append(f'\t\t\treturn fmt.Errorf("--{flag_name} must be a JSON object: %w", err)')
+                lines.append("\t\t}")
+                lines.append(f'\t\tbody["{param["name"]}"] = {var_name}Parsed')
+            for fixed_name, fixed_val in fixed_values.items():
+                lines.append(f'\t\tbody["{fixed_name}"] = "{fixed_val}"')
+        else:
+            lines.append("\t\tbody := map[string]any{")
+            for param in body_params:
+                var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
+                lines.append(f'\t\t\t"{param["name"]}": {var_name},')
+            for fixed_name, fixed_val in fixed_values.items():
+                lines.append(f'\t\t\t"{fixed_name}": "{fixed_val}",')
+            lines.append("\t\t}")
         lines.append("\t\tbodyJSON, err := json.Marshal(body)")
         lines.append("\t\tif err != nil {")
         lines.append('\t\t\treturn fmt.Errorf("failed to encode request body: %w", err)')
@@ -177,6 +197,10 @@ def _generate_request_body(params, fixed_values, method, var_prefix, is_async):
             elif ft in ("int", "int64"):
                 lines.append(f"\t\tif {var_name} != 0 {{")
                 lines.append(f'\t\t\tq.Set("{param["name"]}", fmt.Sprintf("%d", {var_name}))')
+                lines.append("\t\t}")
+            elif ft == "bool":
+                lines.append(f"\t\tif {var_name} {{")
+                lines.append(f'\t\t\tq.Set("{param["name"]}", "true")')
                 lines.append("\t\t}")
         lines.append('\t\tif encoded := q.Encode(); encoded != "" {')
         lines.append('\t\t\trequestURL += "?" + encoded')
@@ -285,6 +309,8 @@ def _generate_init_flags(params, cmd_config, cmd_var, var_prefix):
             desc += " (leave empty for secure prompt)"
         zero = go_zero_value(param)
         lines.append(f'\t{cmd_var}.Flags().{flag_func}(&{var_name}, "{flag_name}", {zero}, "{desc}")')
+        if param["in"] == "body" and param["type"] == "object":
+            lines.append(f'\t{cmd_var}.Flags().StringVar(&{var_name}File, "{flag_name}-file", "", "Path to JSON file for --{flag_name}")')
 
     if has_file:
         file_var = _file_var_name(var_prefix)
@@ -312,7 +338,8 @@ def _generate_init_flags(params, cmd_config, cmd_var, var_prefix):
         lines.append(f'\t{cmd_var}.Flags().IntVar(&{var_prefix}Limit, "limit", 0, "Maximum number of data rows to return")')
 
     for param in params:
-        if param["required"] and param["name"] not in secure_params and param["in"] != "file":
+        has_file_companion = param["in"] == "body" and param["type"] == "object"
+        if param["required"] and param["name"] not in secure_params and param["in"] != "file" and not has_file_companion:
             flag_name = param["cli_flag"]
             lines.append(f'\t_ = {cmd_var}.MarkFlagRequired("{flag_name}")')
 
@@ -394,6 +421,21 @@ def generate_resource_file(resource_name, resource_config, spec, servers):
         lines.append("\t\t\treturn err")
         lines.append("\t\t}")
         lines.append("")
+
+        # File input for object body params (--param-file reads JSON from file)
+        object_body_params = [p for p in params if p["in"] == "body" and p["type"] == "object"]
+        for param in object_body_params:
+            var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
+            flag_name = param["cli_flag"]
+            lines.append(f'\t\tif {var_name} == "" && {var_name}File != "" {{')
+            lines.append(f"\t\t\tfileData, err := os.ReadFile({var_name}File)")
+            lines.append("\t\t\tif err != nil {")
+            lines.append(f'\t\t\t\treturn fmt.Errorf("failed to read --{flag_name}-file: %w", err)')
+            lines.append("\t\t\t}")
+            lines.append(f"\t\t\t{var_name} = string(fileData)")
+            lines.append("\t\t}")
+        if object_body_params:
+            lines.append("")
 
         # Required param validation
         secure_params = set(cmd_config.get("secure_input", []))

@@ -9,6 +9,7 @@
 #   1 = https://api.supermetrics.com (Datasource search)
 #   2 = https://api.supermetrics.com/v2 (Management API)
 #   3 = https://dts-api.supermetrics.com/v1 (DWH Backfills API)
+#   4 = https://api.supermetrics.com/v1 (Connector Builder API)
 
 resources:
   login-links:
@@ -111,3 +112,91 @@ resources:
         operation_id: getDatasourceDetails
         description: "Get datasource configuration details"
         spinner_text: "Fetching data source details..."
+
+  connector-builder:
+    description: "Manage Connector Builder connectors"
+    server_index: 4
+    commands:
+      list:
+        operation_id: listConnectors
+        description: "List all connectors"
+        spinner_text: "Fetching connectors..."
+      get:
+        operation_id: getConnector
+        description: "Get connector details"
+        spinner_text: "Fetching connector..."
+      create:
+        operation_id: createConnector
+        description: "Create a new connector"
+        dry_run: true
+        spinner_text: "Creating connector..."
+      update:
+        operation_id: updateConnector
+        description: "Update a connector"
+        dry_run: true
+        no_content: true
+        done_message: "Connector updated."
+        spinner_text: "Updating connector..."
+      delete:
+        operation_id: deleteConnector
+        description: "Delete a connector"
+        no_content: true
+        done_message: "Connector deleted."
+        confirm: "Delete connector {connector_identifier}?"
+        spinner_text: "Deleting connector..."
+
+  connector-builder-secrets:
+    description: "Manage secrets for Connector Builder connectors"
+    server_index: 4
+    commands:
+      list:
+        operation_id: listConnectorSecrets
+        description: "List secrets for a connector"
+        spinner_text: "Fetching secrets..."
+      create:
+        operation_id: createConnectorSecret
+        description: "Create a new secret"
+        secure_input:
+          - secret_value
+        spinner_text: "Creating secret..."
+      update:
+        operation_id: updateConnectorSecret
+        description: "Update a secret value"
+        no_content: true
+        done_message: "Secret updated."
+        secure_input:
+          - secret_value
+        spinner_text: "Updating secret..."
+      delete:
+        operation_id: deleteConnectorSecret
+        description: "Delete a secret"
+        no_content: true
+        done_message: "Secret deleted."
+        confirm: "Delete secret {secret_placeholder}?"
+        spinner_text: "Deleting secret..."
+
+  connector-builder-logs:
+    description: "View Connector Builder execution logs"
+    server_index: 4
+    commands:
+      list:
+        operation_id: listConnectorLogs
+        description: "List execution logs for a connector"
+        spinner_text: "Fetching logs..."
+      get:
+        operation_id: getConnectorLog
+        description: "Get log entry details"
+        spinner_text: "Fetching log details..."
+
+  connector-builder-logo:
+    description: "Manage Connector Builder connector logos"
+    server_index: 4
+    commands:
+      get:
+        operation_id: getConnectorLogo
+        description: "Get the logo URL for a connector"
+        spinner_text: "Fetching logo..."
+      upload:
+        operation_id: uploadConnectorLogo
+        description: "Upload a logo for a connector"
+        spinner_text: "Uploading logo..."
