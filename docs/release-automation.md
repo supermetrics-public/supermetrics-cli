@@ -27,7 +27,7 @@ itself). The CI workflow handles this sequencing.
 
 ## Release Workflow (`.github/workflows/release.yml`)
 
-**Trigger**: GitHub Release creation (manual via UI). GoReleaser uses `release.mode: replace` to upload assets to the release created in the UI.
+**Trigger**: Push of a tag matching `v*` (e.g., `v0.1.0`).
 
 ```
 Steps:
@@ -456,6 +456,30 @@ Steps:
 Requires a `CLI_DISPATCH_TOKEN` secret in the SDK repo (GitHub PAT with `repo` scope on the CLI repo). Store the PAT
 in 1Password as `GitHub PAT — CLI Dispatch` before adding it to the SDK repo's secrets.
 
+## Auto-Release Workflow (`.github/workflows/auto-release.yml`)
+
+**Trigger**: Push to `main` that touches any of:
+- `openapi-spec.yaml`
+- `cmd/generated/**`
+- `scripts/command-mapping.yaml`
+
+```
+Steps:
+  1. Checkout with full history
+  2. Determine current latest tag (e.g., v0.2.0)
+  3. Determine bump type:
+     - If new files in cmd/generated/ (new resource group): minor bump
+     - Otherwise: patch bump
+  4. Compute next version (e.g., v0.2.1 or v0.3.0)
+  5. Create and push tag
+  6. Tag push triggers release.yml → GoReleaser → binaries + Homebrew
+```
+
+This can use a lightweight action like `mathieudutour/github-tag-action` or a simple shell script with `git tag`.
+
+**Safety**: The workflow only runs on main (not PRs), and only when generated code actually changed. A `[skip-release]`
+marker in the commit message can bypass it.
+
 ## End-to-End Release Flow
 
 ```
@@ -463,15 +487,16 @@ in 1Password as `GitHub PAT — CLI Dispatch` before adding it to the SDK repo's
 2. SDK CI sends repository_dispatch to supermetrics-cli
 3. spec-sync.yml fetches new spec, runs make generate, opens PR
 4. PR reviewed/merged (or auto-merged)
-5. Developer creates a GitHub Release via UI (picks/creates tag)
-6. release.yml triggered by release creation
-7. GoReleaser builds binaries for 5 platforms, .deb/.rpm/.apk packages
-8. GitHub Release updated with binaries + checksums + packages
-9. Homebrew tap formula auto-updated (via GoReleaser brews section)
-10. release.yml sends repository_dispatch to linux-packages repo
-11. linux-packages rebuilds APT + YUM repo metadata, deploys to GitHub Pages
-12. Users see "new version available" within a week (periodic check)
-13. Users run "supermetrics version upgrade" → binary replaced in-place
+5. auto-release.yml detects generated code changes on main
+6. New tag created (e.g., v0.3.1)
+7. release.yml triggered by tag push
+8. GoReleaser builds binaries for 5 platforms, .deb/.rpm/.apk packages
+9. GitHub Release published with binaries + checksums + packages
+10. Homebrew tap formula auto-updated (via GoReleaser brews section)
+11. release.yml sends repository_dispatch to linux-packages repo
+12. linux-packages rebuilds APT + YUM repo metadata, deploys to GitHub Pages
+13. Users see "new version available" within a week (periodic check)
+14. Users run "supermetrics version upgrade" → binary replaced in-place
 ```
 
 ## 1Password Inventory
@@ -496,6 +521,7 @@ next release succeeds. PATs should use the minimum required scope (`repo` on the
 - [x] Create `.goreleaser.yaml` with builds, archives, checksum, brews, nfpms sections
 - [x] Create `.github/workflows/release.yml` (tag-triggered, runs GoReleaser)
 - [x] Create `.github/workflows/spec-sync.yml` (repository_dispatch handler)
+- [x] Create `.github/workflows/auto-release.yml` (tag bumper on generated code changes)
 - [ ] Create `supermetrics-public/homebrew-tap` repo — **requires GitHub admin** (see setup instructions above)
 - [ ] Create `supermetrics-public/linux-packages` repo — **requires GitHub admin** (see setup instructions above)
 - [ ] Generate GPG signing key, store in 1Password (`GPG Signing Key — Linux Packages`)
@@ -508,6 +534,7 @@ next release succeeds. PATs should use the minimum required scope (`repo` on the
 - [ ] Test: verify Homebrew tap formula is updated
 - [ ] Test: verify `linux-packages` workflow triggers and APT/YUM repos are published
 - [ ] Test: trigger spec-sync manually via `gh api`, verify PR is created
+- [ ] Test: merge spec-sync PR, verify auto-release creates tag and release
 
 ## API Change Handling
 
@@ -521,12 +548,15 @@ next release succeeds. PATs should use the minimum required scope (`repo` on the
 | Parameter renamed/removed (breaking)        | Automatic but silent             | Patch         | Review spec-sync PR diff for user impact                      |
 | Endpoint removed                            | Automatic (skipped with warning) | Patch         | Clean up orphaned mapping entry                               |
 | Server-side bug fix (no spec change)        | No CLI release needed            | —             | None                                                          |
-| CLI bug fix (non-generated code)            | Not auto-released                | Patch         | Create GitHub Release via UI                                   |
+| CLI bug fix (non-generated code)            | Not auto-released                | Patch         | Push tag manually: `git tag v0.X.Y && git push origin v0.X.Y` |
 
 ### Version bumping rules
 
-- **Minor** (v0.3.x → v0.4.0): New resource group added
-- **Patch** (v0.3.0 → v0.3.1): All other changes
+- **Minor** (v0.3.x → v0.4.0): New files added in `cmd/generated/` (= new resource group)
+- **Patch** (v0.3.0 → v0.3.1): All other generated code changes
+- **Manual tag**: Changes to hand-written code (`internal/`, `cmd/root.go`, etc.) — intentionally not auto-released to
+  avoid accidental releases from refactoring
+- **Skip**: Commit message containing `[skip-release]` bypasses auto-release
 
 ### Known gaps
 
