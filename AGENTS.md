@@ -89,7 +89,7 @@ if err := resp.ParseJSON(&accounts); err != nil {
 
 ## CI and releases
 
-Releases trigger on `v*` tag push. GoReleaser builds for linux/darwin (amd64+arm64) and windows (amd64).
+Releases trigger on GitHub Release creation (manual via UI). GoReleaser builds for linux/darwin (amd64+arm64) and windows (amd64).
 
 Required CI secrets: `HOMEBREW_TAP_TOKEN` (PAT for `supermetrics-public/homebrew-tap`),
 `SUPERMETRICS_OAUTH_CLIENT_ID`, `SUPERMETRICS_OAUTH_SCOPES`.
