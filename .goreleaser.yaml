@@ -1,8 +1,5 @@
 version: 2
 
-release:
-  mode: replace
-
 builds:
   - binary: supermetrics
     main: ./cmd/supermetrics
