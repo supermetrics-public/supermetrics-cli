@@ -7,15 +7,19 @@ on:
     branches: [main]
   merge_group:
 
-permissions:
-  contents: read
-  pull-requests: write
-  checks: write
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
 
 jobs:
   test:
     name: Run lint checks, tests, and calculate coverage
     runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
