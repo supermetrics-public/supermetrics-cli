@@ -262,6 +262,84 @@ class TestExtractParams(unittest.TestCase):
             self.assertEqual(p["in"], "body")
 
 
+class TestExtractParamsMultipart(unittest.TestCase):
+    def test_multipart_file_param(self):
+        spec = {}
+        operation = {
+            "requestBody": {
+                "content": {
+                    "multipart/form-data": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "logo": {"type": "string", "format": "binary", "description": "Logo file"}
+                            },
+                            "required": ["logo"],
+                        }
+                    }
+                }
+            }
+        }
+        params = extract_params(spec, operation)
+        self.assertEqual(len(params), 1)
+        self.assertEqual(params[0]["name"], "logo")
+        self.assertEqual(params[0]["in"], "file")
+        self.assertEqual(params[0]["cli_flag"], "file")
+        self.assertEqual(params[0]["description"], "")
+        self.assertTrue(params[0]["required"])
+        self.assertEqual(params[0]["format"], "binary")
+
+    def test_multipart_form_field_param(self):
+        spec = {}
+        operation = {
+            "requestBody": {
+                "content": {
+                    "multipart/form-data": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "description": {"type": "string", "description": "File description"}
+                            },
+                        }
+                    }
+                }
+            }
+        }
+        params = extract_params(spec, operation)
+        self.assertEqual(len(params), 1)
+        self.assertEqual(params[0]["name"], "description")
+        self.assertEqual(params[0]["in"], "form_field")
+        self.assertFalse(params[0]["required"])
+
+    def test_multipart_mixed_params(self):
+        spec = {}
+        operation = {
+            "parameters": [
+                {"name": "team_id", "in": "path", "required": True, "schema": {"type": "integer"}},
+            ],
+            "requestBody": {
+                "content": {
+                    "multipart/form-data": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "file": {"type": "string", "format": "binary", "description": "Upload file"},
+                                "title": {"type": "string", "description": "File title"},
+                            },
+                            "required": ["file"],
+                        }
+                    }
+                }
+            },
+        }
+        params = extract_params(spec, operation)
+        self.assertEqual(len(params), 3)
+        by_name = {p["name"]: p for p in params}
+        self.assertEqual(by_name["team_id"]["in"], "path")
+        self.assertEqual(by_name["file"]["in"], "file")
+        self.assertEqual(by_name["title"]["in"], "form_field")
+
+
 class TestGenerateRegisterFiles(unittest.TestCase):
     def _all_content(self, resources):
         """Join all generated file contents for assertion convenience."""
@@ -337,6 +415,258 @@ class TestGenerateRegisterFiles(unittest.TestCase):
             if "resolveTimeout" in content:
                 break
         self.assertIn("resolveTimeout(cmd,", content)
+
+    def test_contains_multipart_helpers(self):
+        files = generate_register_files({"queries": {}})
+        content = files["request.go"]
+        self.assertIn("buildMultipartStream", content)
+        self.assertIn("executeMultipartRequest", content)
+        self.assertIn("resolveFileInput", content)
+
+    def test_execute_request_signatures(self):
+        files = generate_register_files({"queries": {}})
+        content = files["request.go"]
+        # doRequest has contentType (no getBody)
+        self.assertIn("func doRequest(cmd *cobra.Command, method, url string, body io.Reader, contentType, apiKey string", content)
+        # executeRequest and executeRequestNoContent keep original signatures (no contentType)
+        self.assertIn("func executeRequest(cmd *cobra.Command, method, url string, body io.Reader, apiKey string", content)
+        self.assertIn("func executeRequestNoContent(cmd *cobra.Command, method, url string, body io.Reader, apiKey string", content)
+        # executeMultipartRequest has contentType (no getBody)
+        self.assertIn("func executeMultipartRequest(cmd *cobra.Command, method, url string, body io.Reader, contentType, apiKey string", content)
+        # executeMultipartRequestNoContent has contentType (no getBody)
+        self.assertIn("func executeMultipartRequestNoContent(cmd *cobra.Command, method, url string, body io.Reader, contentType, apiKey string", content)
+
+
+class TestMultipartResourceGeneration(unittest.TestCase):
+    """Test that generate_resource_file produces correct ordering for multipart commands."""
+
+    def _generate_multipart_resource(self, *, dry_run=False, confirm=""):
+        spec = {
+            "servers": [{"url": "https://api.supermetrics.com/v2"}],
+            "paths": {
+                "/teams/{team_id}/logos": {
+                    "post": {
+                        "operationId": "uploadLogo",
+                        "parameters": [
+                            {"name": "team_id", "in": "path", "required": True, "schema": {"type": "integer"}},
+                        ],
+                        "requestBody": {
+                            "content": {
+                                "multipart/form-data": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "logo": {"type": "string", "format": "binary"},
+                                            "title": {"type": "string", "description": "Logo title"},
+                                        },
+                                        "required": ["logo"],
+                                    }
+                                }
+                            }
+                        },
+                    }
+                }
+            },
+        }
+        config = {
+            "description": "Logo management",
+            "commands": {
+                "upload": {
+                    "operation_id": "uploadLogo",
+                    "description": "Upload a logo",
+                    "dry_run": dry_run,
+                    "confirm": confirm,
+                },
+            },
+        }
+        servers = spec["servers"]
+        return generate_resource_file("logos", config, spec, servers)
+
+    def test_multipart_stream_after_dry_run(self):
+        content = self._generate_multipart_resource(dry_run=True)
+        dry_run_pos = content.index("dry-run")
+        stream_pos = content.index("buildMultipartStream")
+        self.assertGreater(stream_pos, dry_run_pos, "buildMultipartStream must appear after dry-run check")
+
+    def test_multipart_stream_after_confirm(self):
+        content = self._generate_multipart_resource(confirm="Upload logo for team {team_id}?")
+        confirm_pos = content.index("confirmAction")
+        stream_pos = content.index("buildMultipartStream")
+        self.assertGreater(stream_pos, confirm_pos, "buildMultipartStream must appear after confirmAction")
+
+    def test_resolve_file_input_before_dry_run(self):
+        content = self._generate_multipart_resource(dry_run=True)
+        resolve_pos = content.index("resolveFileInput")
+        dry_run_pos = content.index("dry-run")
+        self.assertLess(resolve_pos, dry_run_pos, "resolveFileInput must appear before dry-run check")
+
+    def test_multipart_uses_execute_multipart_request(self):
+        content = self._generate_multipart_resource()
+        self.assertIn("executeMultipartRequest", content)
+        self.assertNotIn("executeRequest(cmd", content)
+
+    def test_multipart_has_file_flag(self):
+        content = self._generate_multipart_resource()
+        self.assertIn('"file"', content)
+        self.assertIn("resolveFileInput", content)
+
+    def test_multipart_form_field_conditional(self):
+        content = self._generate_multipart_resource()
+        self.assertIn('formFields["title"]', content)
+
+
+class TestObjectBodyParams(unittest.TestCase):
+    """Test that the generator correctly handles type: object body parameters."""
+
+    def _make_spec_and_config(self):
+        spec = {
+            "servers": [{"url": "https://api.supermetrics.com/v2"}],
+            "paths": {
+                "/widgets/{widget_id}": {
+                    "put": {
+                        "operationId": "updateWidget",
+                        "parameters": [
+                            {"name": "widget_id", "in": "path", "required": True, "schema": {"type": "string"}},
+                        ],
+                        "requestBody": {
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {"type": "string", "description": "Widget name"},
+                                            "connector": {"type": "object", "description": "Connector settings"},
+                                        },
+                                        "required": ["name", "connector"],
+                                    }
+                                }
+                            }
+                        },
+                    }
+                }
+            },
+        }
+        config = {
+            "description": "Widget management",
+            "commands": {
+                "update": {
+                    "operation_id": "updateWidget",
+                    "description": "Update a widget",
+                },
+            },
+        }
+        return spec, config
+
+    def test_object_body_param_generates_json_unmarshal(self):
+        spec, config = self._make_spec_and_config()
+        content = generate_resource_file("widgets", config, spec, spec["servers"])
+
+        # Object param must use json.Unmarshal, not direct assignment
+        self.assertIn("json.Unmarshal", content)
+        self.assertNotIn('"connector": flagWidgetsUpdateConnector,', content)
+
+        # Regular string param uses separate assignment (not map literal) when object params exist
+        self.assertIn('body["name"] = flagWidgetsUpdateName', content)
+
+    def test_object_body_param_error_message_uses_flag_name(self):
+        spec, config = self._make_spec_and_config()
+        content = generate_resource_file("widgets", config, spec, spec["servers"])
+
+        # Error message must reference the CLI flag name
+        self.assertIn("--connector must be a JSON object", content)
+
+    def test_no_object_params_unchanged(self):
+        spec = {
+            "servers": [{"url": "https://api.supermetrics.com/v2"}],
+            "paths": {
+                "/items": {
+                    "post": {
+                        "operationId": "createItem",
+                        "requestBody": {
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "title": {"type": "string", "description": "Item title"},
+                                            "count": {"type": "integer", "description": "Item count"},
+                                        },
+                                        "required": ["title", "count"],
+                                    }
+                                }
+                            }
+                        },
+                    }
+                }
+            },
+        }
+        config = {
+            "description": "Item management",
+            "commands": {
+                "create": {
+                    "operation_id": "createItem",
+                    "description": "Create an item",
+                },
+            },
+        }
+        content = generate_resource_file("items", config, spec, spec["servers"])
+
+        # No object params: must use map literal syntax
+        self.assertIn("body := map[string]any{", content)
+        self.assertNotIn("json.Unmarshal", content)
+
+
+class TestBooleanQueryParams(unittest.TestCase):
+    """Test that boolean query params generate the correct conditional set code."""
+
+    def _make_spec_and_config(self):
+        spec = {
+            "servers": [{"url": "https://api.supermetrics.com/v2"}],
+            "paths": {
+                "/reports": {
+                    "get": {
+                        "operationId": "listReports",
+                        "parameters": [
+                            {
+                                "name": "include_archived",
+                                "in": "query",
+                                "required": False,
+                                "description": "Include archived reports",
+                                "schema": {"type": "boolean"},
+                            },
+                        ],
+                    }
+                }
+            },
+        }
+        config = {
+            "description": "Report management",
+            "commands": {
+                "list": {
+                    "operation_id": "listReports",
+                    "description": "List reports",
+                },
+            },
+        }
+        return spec, config
+
+    def test_bool_query_param_generates_conditional_set(self):
+        spec, config = self._make_spec_and_config()
+        content = generate_resource_file("reports", config, spec, spec["servers"])
+
+        # Bool param must emit q.Set with "true" string value
+        self.assertIn('q.Set("include_archived", "true")', content)
+
+    def test_bool_query_param_not_set_when_false(self):
+        spec, config = self._make_spec_and_config()
+        content = generate_resource_file("reports", config, spec, spec["servers"])
+
+        # The set must be wrapped in an if-condition on the flag variable (not unconditional)
+        var_name = "flagReportsListIncludeArchived"
+        self.assertIn(f"if {var_name} {{", content)
+
+        # Must NOT set "false" unconditionally — only "true" inside the condition
+        self.assertNotIn('q.Set("include_archived", "false")', content)
 
 
 if __name__ == "__main__":

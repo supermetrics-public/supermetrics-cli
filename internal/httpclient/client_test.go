@@ -99,6 +99,43 @@ func TestDo_PostWithBody(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestDo_ContentTypeOverride(t *testing.T) {
+	t.Run("custom ContentType is sent", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "application/x-www-form-urlencoded", r.Header.Get("Content-Type"))
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{}`))
+		}))
+		defer srv.Close()
+
+		_, err := Do(context.Background(), Request{
+			Method:      "POST",
+			URL:         srv.URL,
+			Body:        strings.NewReader(`key=value`),
+			APIKey:      "key",
+			ContentType: "application/x-www-form-urlencoded",
+		})
+		require.NoError(t, err)
+	})
+
+	t.Run("empty ContentType defaults to application/json", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{}`))
+		}))
+		defer srv.Close()
+
+		_, err := Do(context.Background(), Request{
+			Method: "POST",
+			URL:    srv.URL,
+			Body:   strings.NewReader(`{"key":"value"}`),
+			APIKey: "key",
+		})
+		require.NoError(t, err)
+	})
+}
+
 func TestDo_ServerError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -225,6 +262,39 @@ func TestParseJSONWithMeta_Error(t *testing.T) {
 	apiErr, ok := err.(*APIError)
 	require.True(t, ok)
 	assert.Equal(t, "Bad input", apiErr.Message)
+}
+
+func TestParseJSON_EmptyBody(t *testing.T) {
+	resp := &Response{Body: []byte{}}
+	result, err := resp.ParseJSON()
+	require.NoError(t, err)
+	assert.Nil(t, result)
+}
+
+func TestParseJSON_204NoContent(t *testing.T) {
+	resp := &Response{StatusCode: 204, Body: []byte{}}
+	result, err := resp.ParseJSON()
+	require.NoError(t, err)
+	assert.Nil(t, result)
+}
+
+func TestParseJSON_NonEmptyBody(t *testing.T) {
+	resp := &Response{
+		Body: []byte(`{"meta":{"request_id":"req1"},"data":{"id":"abc"}}`),
+	}
+	result, err := resp.ParseJSON()
+	require.NoError(t, err)
+	m, ok := result.(map[string]any)
+	require.True(t, ok, "expected map[string]any")
+	assert.Equal(t, "abc", m["id"])
+}
+
+func TestParseJSONWithMeta_EmptyBody(t *testing.T) {
+	resp := &Response{Body: []byte{}}
+	data, meta, err := resp.ParseJSONWithMeta()
+	require.NoError(t, err)
+	assert.Nil(t, data)
+	assert.Nil(t, meta)
 }
 
 func TestDo_HTTPErrorWithEnvelope(t *testing.T) {

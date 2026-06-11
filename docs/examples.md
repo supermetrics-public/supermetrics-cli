@@ -87,6 +87,13 @@ Back to [README](../README.md)
   - [How do I check backfill status or cancel a backfill?](#how-do-i-check-backfill-status-or-cancel-a-backfill)
 - **Login Links & Auth Management**
   - [How do I create and manage OAuth login links?](#how-do-i-create-and-manage-oauth-login-links)
+- **Connector Builder**
+  - [How do I manage connectors?](#how-do-i-manage-connectors)
+  - [How do I update a connector?](#how-do-i-update-a-connector)
+  - [How do I delete a connector?](#how-do-i-delete-a-connector)
+  - [How do I manage connector secrets?](#how-do-i-manage-connector-secrets)
+  - [How do I view connector logs?](#how-do-i-view-connector-logs)
+  - [How do I manage a connector logo?](#how-do-i-manage-a-connector-logo)
 - **Scripting & Automation**
   - [How do I use the Supermetrics CLI in a bash script or cron job?](#how-do-i-use-the-supermetrics-cli-in-a-bash-script-or-cron-job)
   - [How do I use environment variables and profiles in CI/CD?](#how-do-i-use-environment-variables-and-profiles-in-cicd)
@@ -1557,6 +1564,108 @@ supermetrics login-links list -o table
 
 ```bash
 supermetrics login-links close --yes
+```
+
+---
+
+## Connector Builder
+
+Build custom connectors to pull data from any API into Supermetrics. See the
+[Connector Builder documentation](https://docs.supermetrics.com/docs/connector-builder) for full details.
+
+### How do I manage connectors?
+
+```bash
+# List all connectors
+supermetrics connector-builder list --team-id 12345
+
+# List with configurations included
+supermetrics connector-builder list --team-id 12345 --include-configs
+
+# Get a specific connector
+supermetrics connector-builder get --team-id 12345 --connector-identifier abc-123
+
+# Create a new connector
+supermetrics connector-builder create --team-id 12345 --title "My Connector" --description "Fetches product data"
+
+# Preview create without executing
+supermetrics connector-builder create --team-id 12345 --title "My Connector" --dry-run
+
+# Duplicate an existing connector
+supermetrics connector-builder create --team-id 12345 --title "My Connector Copy" --connector-identifier abc-123
+```
+
+### How do I update a connector?
+
+```bash
+# Update with inline JSON
+supermetrics connector-builder update --team-id 12345 --connector-identifier abc-123 \
+  --connector '{"name":"Updated Name","description":"New description"}' \
+  --configuration '{"version":"1.0.0","configuration_json":{}}'
+
+# Update from files (recommended for large configurations)
+supermetrics connector-builder update --team-id 12345 --connector-identifier abc-123 \
+  --connector-file connector.json --configuration-file config.json
+
+# Preview update without executing
+supermetrics connector-builder update --team-id 12345 --connector-identifier abc-123 \
+  --connector-file connector.json --configuration-file config.json --dry-run
+```
+
+### How do I delete a connector?
+
+```bash
+# Delete with confirmation prompt
+supermetrics connector-builder delete --team-id 12345 --connector-identifier abc-123
+
+# Delete without confirmation
+supermetrics connector-builder delete --team-id 12345 --connector-identifier abc-123 --yes
+```
+
+### How do I manage connector secrets?
+
+```bash
+# List secrets (values are never shown)
+supermetrics connector-builder-secrets list --team-id 12345 --connector-identifier abc-123
+
+# Create a secret — value prompted with masked input
+supermetrics connector-builder-secrets create --team-id 12345 --connector-identifier abc-123 \
+  --secret-name "API Key"
+
+# Create a secret with value via flag (visible in shell history)
+supermetrics connector-builder-secrets create --team-id 12345 --connector-identifier abc-123 \
+  --secret-name "API Key" --secret-value "sk-123..."
+
+# Update a secret value (prompted securely)
+supermetrics connector-builder-secrets update --team-id 12345 --connector-identifier abc-123 \
+  --secret-placeholder '{{API_KEY}}'
+
+# Delete a secret
+supermetrics connector-builder-secrets delete --team-id 12345 --connector-identifier abc-123 \
+  --secret-placeholder '{{API_KEY}}' --yes
+```
+
+### How do I view connector logs?
+
+```bash
+# List recent logs
+supermetrics connector-builder-logs list --team-id 12345 --connector-identifier abc-123
+
+# List with limit
+supermetrics connector-builder-logs list --team-id 12345 --connector-identifier abc-123 --limit 50
+
+# Get specific log details
+supermetrics connector-builder-logs get --team-id 12345 --connector-identifier abc-123 --log-id log-456
+```
+
+### How do I manage a connector logo?
+
+```bash
+# Get logo URL
+supermetrics connector-builder-logo get --team-id 12345 --connector-identifier abc-123
+
+# Upload a logo (PNG/JPG, max 5MB)
+supermetrics connector-builder-logo upload --team-id 12345 --connector-identifier abc-123 --file logo.png
 ```
 
 ---

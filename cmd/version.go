@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/supermetrics-public/supermetrics-cli/internal/buildcfg"
+	"github.com/supermetrics-public/supermetrics-cli/internal/cli"
 	"github.com/supermetrics-public/supermetrics-cli/internal/update"
 )
 
@@ -14,8 +15,8 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show CLI version information",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Fprintf(infoWriter(), "supermetrics-cli %s (Alpha) (built %s, commit %s)\n", buildcfg.Version, buildcfg.BuildDate, buildcfg.Commit)
-		update.PrintUpdateHint(infoWriterErr(), buildcfg.Version)
+		fmt.Fprintf(cli.InfoWriter(cmd), "supermetrics-cli %s (Alpha) (built %s, commit %s)\n", buildcfg.Version, buildcfg.BuildDate, buildcfg.Commit)
+		update.PrintUpdateHint(cli.InfoWriterErr(cmd), buildcfg.Version)
 	},
 }
 
@@ -25,7 +26,7 @@ var upgradeCmd = &cobra.Command{
 	Long:  `Download and install the latest version of the Supermetrics CLI.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
-		w := infoWriter()
+		w := cli.InfoWriter(cmd)
 		u := update.NewUpdater()
 
 		checkOnly, _ := cmd.Flags().GetBool("check")

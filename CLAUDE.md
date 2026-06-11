@@ -52,6 +52,12 @@ Per-command features controlled via YAML fields in `scripts/command-mapping.yaml
 - `timeout: "60m"` — override default 30s timeout. Go duration format. Used by long-running commands
 - `paginated: true` — `--all` and `--limit` flags for auto-pagination. Follows `meta.paginate.next` URLs, accumulates
   data rows across pages. Used by `queries execute`
+- `no_content: true` — skips response body parsing for 204 No Content responses. Prints `done_message` on success. Used
+  by `connector-builder update/delete`, `connector-builder-secrets update/delete`
+- `done_message: "text"` — message printed to stderr after successful `no_content` request (default: "Done.")
+- `secure_input: [field1, ...]` — prompts for masked terminal input when flag value is empty. Appends "(leave empty for
+  secure prompt)" to flag description. Cannot coexist with file upload (both read stdin). Used by
+  `connector-builder-secrets create/update` for `secret_value`
 
 The generator (`scripts/generate_commands.py`) produces Cobra commands that use the shared HTTP client at
 `internal/httpclient/client.go` for all API calls. The generator runs via `uv run python3` and requires Python 3.13+
@@ -61,7 +67,7 @@ The generator (`scripts/generate_commands.py`) produces Cobra commands that use 
 
 - `cmd/root.go` — root command, global flags, `.env` loading, config loading for defaults
 - `cmd/generated/` — auto-generated resource commands (one file per resource group, plus `register.go` with shared
-  helpers)
+  helpers). Includes `connector_builder*.go` for Connector Builder commands (connectors CRUD, secrets, logs, logo)
 - `internal/httpclient/` — shared HTTP client: timeouts, auth headers, verbose logging (with request IDs), API response
   envelope unwrapping, centralized error handling
 - `internal/auth/` — credential resolution (`--api-key` flag > env var > OAuth token with auto-refresh > API key from
@@ -115,6 +121,9 @@ The generator (`scripts/generate_commands.py`) produces Cobra commands that use 
   `infoWriterErr()` return `io.Discard` in quiet mode — errors and results still printed normally
 - Builds use `CGO_ENABLED=0` and `-trimpath` for static, reproducible binaries. The Makefile reads `.env` and injects
   values via `-ldflags` into `internal/buildcfg`
+- Body parameters with `type: object` in the OpenAPI spec accept JSON strings via flags (e.g.,
+  `--connector '{"name":"..."}'`). Companion `--{flag}-file` flags read JSON from files. The generator emits
+  `json.Unmarshal` to parse string values into maps for nested request bodies
 
 ## Design decisions
 

@@ -197,6 +197,10 @@ If no credentials are found, the CLI suggests running `supermetrics login` or `s
 | `queries`     | `execute`                                                  | Execute data queries against connected sources          |
 | `backfills`   | `create`, `get`, `get-latest`, `list-incomplete`, `cancel` | Manage Data Warehouse backfills                         |
 | `datasource`  | `get`                                                      | View data source configuration details                  |
+| `connector-builder` | `list`, `get`, `create`, `update`, `delete`          | Manage [Connector Builder](https://docs.supermetrics.com/docs/connector-builder) connectors |
+| `connector-builder-secrets` | `list`, `create`, `update`, `delete`          | Manage secrets for a connector                          |
+| `connector-builder-logs` | `list`, `get`                                    | View execution logs for a connector                     |
+| `connector-builder-logo` | `get`, `upload`                                   | Manage the logo for a connector                         |
 
 Use `--help` on any command for detailed flag information:
 
@@ -319,6 +323,34 @@ All commands show an animated spinner on stderr with elapsed time while waiting 
 - `backfills create --wait` shows a determinate progress bar with transfer run counts
 
 Progress output is suppressed in `--quiet` mode, `--verbose` mode, or when stderr is not a terminal.
+
+### File input for JSON flags
+
+Commands with complex JSON body parameters (e.g., `connector-builder update`) support companion `--*-file` flags that
+read JSON from a file instead of requiring inline JSON:
+
+```bash
+supermetrics connector-builder update --team-id 1 --connector-identifier abc \
+  --connector-file connector.json --configuration-file config.json
+```
+
+### Secure input
+
+`connector-builder-secrets create` and `update` prompt for `--secret-value` with masked terminal input when the flag is
+omitted, preventing secrets from appearing in shell history:
+
+```bash
+supermetrics connector-builder-secrets create --team-id 1 --connector-identifier abc --secret-name "API Key"
+# Enter secret-value: ********
+```
+
+### File upload
+
+`connector-builder-logo upload` accepts a `--file` flag for image uploads (PNG, JPG, max 5MB):
+
+```bash
+supermetrics connector-builder-logo upload --team-id 1 --connector-identifier abc --file logo.png
+```
 
 ## Configuration
 

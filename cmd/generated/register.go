@@ -24,4 +24,8 @@ func RegisterAll(rootCmd *cobra.Command) {
 	rootCmd.AddCommand(QueriesCmd)
 	rootCmd.AddCommand(BackfillsCmd)
 	rootCmd.AddCommand(DatasourceCmd)
+	rootCmd.AddCommand(ConnectorBuilderCmd)
+	rootCmd.AddCommand(ConnectorBuilderSecretsCmd)
+	rootCmd.AddCommand(ConnectorBuilderLogsCmd)
+	rootCmd.AddCommand(ConnectorBuilderLogoCmd)
 }

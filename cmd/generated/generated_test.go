@@ -3,11 +3,14 @@ package generated
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1530,4 +1533,523 @@ func TestResolveTimeout_NoFlag(t *testing.T) {
 
 	got := resolveTimeout(cmd, 42*time.Second)
 	assert.Equal(t, 42*time.Second, got)
+}
+
+func resetStdinReader() {
+	stdinReaderOnce = sync.Once{}
+	stdinReader = nil
+}
+
+func TestReadSecureInput_Pipe(t *testing.T) {
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	_, _ = w.WriteString("mysecret\n")
+	w.Close()
+
+	old := os.Stdin
+	resetStdinReader()
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = old; resetStdinReader() })
+
+	cmd := &cobra.Command{Use: "test"}
+	val, err := readSecureInput(cmd, "secret-value")
+	require.NoError(t, err)
+	assert.Equal(t, "mysecret", val)
+}
+
+func TestReadSecureInput_PipeNoNewline(t *testing.T) {
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	_, _ = w.WriteString("mysecret")
+	w.Close()
+
+	old := os.Stdin
+	resetStdinReader()
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = old; resetStdinReader() })
+
+	cmd := &cobra.Command{Use: "test"}
+	val, err := readSecureInput(cmd, "secret-value")
+	require.NoError(t, err)
+	assert.Equal(t, "mysecret", val)
+}
+
+func TestReadSecureInput_PipeEmpty(t *testing.T) {
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	w.Close()
+
+	old := os.Stdin
+	resetStdinReader()
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = old; resetStdinReader() })
+
+	cmd := &cobra.Command{Use: "test"}
+	val, err := readSecureInput(cmd, "secret-value")
+	require.NoError(t, err)
+	assert.Equal(t, "", val)
+}
+
+func TestReadSecureInput_PipePromptToStderr(t *testing.T) {
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	_, _ = w.WriteString("val\n")
+	w.Close()
+
+	old := os.Stdin
+	resetStdinReader()
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = old; resetStdinReader() })
+
+	var stderr bytes.Buffer
+	cmd := &cobra.Command{Use: "test"}
+	cmd.SetErr(&stderr)
+
+	_, err = readSecureInput(cmd, "secret-value")
+	require.NoError(t, err)
+	assert.Empty(t, stderr.String(), "pipe mode should not print prompt")
+}
+
+func TestExecuteRequestNoContent_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	httpClient = srv.Client()
+	t.Cleanup(func() { httpClient = nil })
+
+	root := &cobra.Command{Use: "root"}
+	root.PersistentFlags().Bool("verbose", false, "")
+	root.PersistentFlags().Bool("no-retry", true, "")
+	root.PersistentFlags().Bool("quiet", false, "")
+	cmd := &cobra.Command{Use: "test"}
+	root.AddCommand(cmd)
+
+	err := executeRequestNoContent(cmd, "DELETE", srv.URL+"/resource/1", nil, "test-key", 10*time.Second, "Deleting...")
+	assert.NoError(t, err)
+}
+
+// --- Connector Builder tests ---
+
+// TestConnectorBuilderListSuccess tests successful connector builder list
+func TestConnectorBuilderListSuccess(t *testing.T) {
+	setupOAuthEnv(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		assert.Contains(t, r.URL.Path, "/v1/teams/123/connector_builder/connectors")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"count": 1, "connectors": [{"connector_identifier": "abc"}]}`))
+	}))
+	defer srv.Close()
+	defer setTestHTTPClient(srv)()
+
+	stdout, _, err := executeRootCommand([]string{
+		"connector-builder", "list",
+		"--api-key", "test-key",
+		"--output", "json",
+		"--team-id", "123",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "abc")
+}
+
+// TestConnectorBuilderGetSuccess tests successful connector builder get
+func TestConnectorBuilderGetSuccess(t *testing.T) {
+	setupOAuthEnv(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		assert.Contains(t, r.URL.Path, "/connectors/abc")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"connector_identifier": "abc", "title": "My Connector"}`))
+	}))
+	defer srv.Close()
+	defer setTestHTTPClient(srv)()
+
+	_, _, err := executeRootCommand([]string{
+		"connector-builder", "get",
+		"--api-key", "test-key",
+		"--output", "json",
+		"--team-id", "123",
+		"--connector-identifier", "abc",
+	})
+	require.NoError(t, err)
+}
+
+// TestConnectorBuilderCreateSuccess tests successful connector builder create
+func TestConnectorBuilderCreateSuccess(t *testing.T) {
+	setupOAuthEnv(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		body, _ := io.ReadAll(r.Body)
+		assert.Contains(t, string(body), "title")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"connector_identifier": "new-abc", "title": "My Connector"}`))
+	}))
+	defer srv.Close()
+	defer setTestHTTPClient(srv)()
+
+	_, _, err := executeRootCommand([]string{
+		"connector-builder", "create",
+		"--api-key", "test-key",
+		"--output", "json",
+		"--team-id", "123",
+		"--title", "My Connector",
+	})
+	require.NoError(t, err)
+}
+
+// TestConnectorBuilderCreateDryRun tests that --dry-run prints request details without executing
+func TestConnectorBuilderCreateDryRun(t *testing.T) {
+	setupOAuthEnv(t)
+
+	// No test server — dry-run should NOT make any HTTP call
+	stdout, stderr, err := executeRootCommand([]string{
+		"connector-builder", "create",
+		"--api-key", "test-key",
+		"--team-id", "123",
+		"--title", "My Connector",
+		"--dry-run",
+	})
+	require.NoError(t, err)
+	assert.Empty(t, stdout, "expected empty stdout for dry-run")
+	assert.Contains(t, stderr, "POST", "expected POST in stderr")
+	assert.Contains(t, stderr, "/v1/teams/123/connector_builder/connectors", "expected URL in stderr")
+}
+
+// TestConnectorBuilderUpdateSuccess tests successful connector builder update (204 response)
+func TestConnectorBuilderUpdateSuccess(t *testing.T) {
+	setupOAuthEnv(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "PUT", r.Method)
+		assert.Contains(t, r.URL.Path, "/connectors/abc")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	defer setTestHTTPClient(srv)()
+
+	_, stderr, err := executeRootCommand([]string{
+		"connector-builder", "update",
+		"--api-key", "test-key",
+		"--team-id", "123",
+		"--connector-identifier", "abc",
+		"--connector", `{"name":"test"}`,
+		"--configuration", `{"id":"1","version":"v1","configuration_json":"{}"}`,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, stderr, "Connector updated.")
+}
+
+// TestConnectorBuilderUpdateInvalidJSON tests that invalid JSON for object params is rejected
+func TestConnectorBuilderUpdateInvalidJSON(t *testing.T) {
+	setupOAuthEnv(t)
+
+	_, _, err := executeRootCommand([]string{
+		"connector-builder", "update",
+		"--api-key", "test-key",
+		"--team-id", "123",
+		"--connector-identifier", "abc",
+		"--connector", `not-json`,
+		"--configuration", `{"id":"1"}`,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--connector must be a JSON object")
+}
+
+// TestConnectorBuilderUpdateFromFile tests that --configuration-file reads JSON from a file
+func TestConnectorBuilderUpdateFromFile(t *testing.T) {
+	setupOAuthEnv(t)
+
+	// Reset package-level flag vars that may be polluted by prior tests
+	flagConnectorBuilderUpdateConnector = ""
+	flagConnectorBuilderUpdateConfiguration = ""
+	flagConnectorBuilderUpdateConnectorFile = ""
+	flagConnectorBuilderUpdateConfigurationFile = ""
+
+	configFile := filepath.Join(t.TempDir(), "config.json")
+	os.WriteFile(configFile, []byte(`{"id":"1","version":"v1","configuration_json":"{}"}`), 0o644)
+
+	connectorFile := filepath.Join(t.TempDir(), "connector.json")
+	os.WriteFile(connectorFile, []byte(`{"name":"from-file"}`), 0o644)
+
+	var receivedBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		receivedBody = string(body)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	defer setTestHTTPClient(srv)()
+
+	_, _, err := executeRootCommand([]string{
+		"connector-builder", "update",
+		"--api-key", "test-key",
+		"--team-id", "123",
+		"--connector-identifier", "abc",
+		"--connector-file", connectorFile,
+		"--configuration-file", configFile,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, receivedBody, "from-file")
+	assert.Contains(t, receivedBody, "configuration_json")
+}
+
+// TestConnectorBuilderDeleteSuccess tests successful connector builder delete (204 response)
+func TestConnectorBuilderDeleteSuccess(t *testing.T) {
+	setupOAuthEnv(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "DELETE", r.Method)
+		assert.Contains(t, r.URL.Path, "/connectors/abc")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	defer setTestHTTPClient(srv)()
+
+	_, stderr, err := executeRootCommand([]string{
+		"connector-builder", "delete",
+		"--api-key", "test-key",
+		"--team-id", "123",
+		"--connector-identifier", "abc",
+		"--yes",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, stderr, "Connector deleted.")
+}
+
+// TestConnectorBuilderSecretsListSuccess tests successful connector builder secrets list
+func TestConnectorBuilderSecretsListSuccess(t *testing.T) {
+	setupOAuthEnv(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		assert.Contains(t, r.URL.Path, "/connectors/abc/secrets")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"count": 1, "secrets": [{"secret_placeholder": "{{MY_KEY}}"}]}`))
+	}))
+	defer srv.Close()
+	defer setTestHTTPClient(srv)()
+
+	stdout, _, err := executeRootCommand([]string{
+		"connector-builder-secrets", "list",
+		"--api-key", "test-key",
+		"--output", "json",
+		"--team-id", "123",
+		"--connector-identifier", "abc",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "MY_KEY")
+}
+
+// TestConnectorBuilderSecretsCreateSuccess tests successful connector builder secret creation
+func TestConnectorBuilderSecretsCreateSuccess(t *testing.T) {
+	setupOAuthEnv(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		body, _ := io.ReadAll(r.Body)
+		assert.Contains(t, string(body), "secret_name")
+		assert.Contains(t, string(body), "secret_value")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"secret_placeholder": "{{API_KEY}}", "secret_name": "API Key"}`))
+	}))
+	defer srv.Close()
+	defer setTestHTTPClient(srv)()
+
+	_, _, err := executeRootCommand([]string{
+		"connector-builder-secrets", "create",
+		"--api-key", "test-key",
+		"--output", "json",
+		"--team-id", "123",
+		"--connector-identifier", "abc",
+		"--secret-name", "API Key",
+		"--secret-value", "sk-123",
+	})
+	require.NoError(t, err)
+}
+
+// TestConnectorBuilderSecretsUpdateSuccess tests successful connector builder secret update (204 response)
+func TestConnectorBuilderSecretsUpdateSuccess(t *testing.T) {
+	setupOAuthEnv(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "PUT", r.Method)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	defer setTestHTTPClient(srv)()
+
+	_, stderr, err := executeRootCommand([]string{
+		"connector-builder-secrets", "update",
+		"--api-key", "test-key",
+		"--team-id", "123",
+		"--connector-identifier", "abc",
+		"--secret-placeholder", "{{MY_KEY}}",
+		"--secret-value", "new-value",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, stderr, "Secret updated.")
+}
+
+// TestConnectorBuilderSecretsDeleteSuccess tests successful connector builder secret delete (204 response)
+func TestConnectorBuilderSecretsDeleteSuccess(t *testing.T) {
+	setupOAuthEnv(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "DELETE", r.Method)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	defer setTestHTTPClient(srv)()
+
+	_, stderr, err := executeRootCommand([]string{
+		"connector-builder-secrets", "delete",
+		"--api-key", "test-key",
+		"--team-id", "123",
+		"--connector-identifier", "abc",
+		"--secret-placeholder", "{{MY_KEY}}",
+		"--yes",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, stderr, "Secret deleted.")
+}
+
+// TestConnectorBuilderLogsListSuccess tests successful connector builder logs list
+func TestConnectorBuilderLogsListSuccess(t *testing.T) {
+	setupOAuthEnv(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		assert.Contains(t, r.URL.Path, "/connectors/abc/logs")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"logs": []}`))
+	}))
+	defer srv.Close()
+	defer setTestHTTPClient(srv)()
+
+	_, _, err := executeRootCommand([]string{
+		"connector-builder-logs", "list",
+		"--api-key", "test-key",
+		"--output", "json",
+		"--team-id", "123",
+		"--connector-identifier", "abc",
+	})
+	require.NoError(t, err)
+}
+
+// TestConnectorBuilderLogGetSuccess tests successful connector builder log get
+func TestConnectorBuilderLogGetSuccess(t *testing.T) {
+	setupOAuthEnv(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		assert.Contains(t, r.URL.Path, "/logs/log-123")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"log_id": "log-123", "level": "INFO", "message": "test"}`))
+	}))
+	defer srv.Close()
+	defer setTestHTTPClient(srv)()
+
+	_, _, err := executeRootCommand([]string{
+		"connector-builder-logs", "get",
+		"--api-key", "test-key",
+		"--output", "json",
+		"--team-id", "123",
+		"--connector-identifier", "abc",
+		"--log-id", "log-123",
+	})
+	require.NoError(t, err)
+}
+
+// TestConnectorBuilderLogoGetSuccess tests successful connector builder logo get
+func TestConnectorBuilderLogoGetSuccess(t *testing.T) {
+	setupOAuthEnv(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		assert.Contains(t, r.URL.Path, "/connectors/abc/logo")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"logo_url": "https://example.com/logo.png"}`))
+	}))
+	defer srv.Close()
+	defer setTestHTTPClient(srv)()
+
+	stdout, _, err := executeRootCommand([]string{
+		"connector-builder-logo", "get",
+		"--api-key", "test-key",
+		"--output", "json",
+		"--team-id", "123",
+		"--connector-identifier", "abc",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "logo.png")
+}
+
+// TestConnectorBuilderLogoUploadSuccess tests successful connector builder logo upload
+func TestConnectorBuilderLogoUploadSuccess(t *testing.T) {
+	setupOAuthEnv(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		assert.Contains(t, r.URL.Path, "/connectors/abc/logo")
+		assert.Contains(t, r.Header.Get("Content-Type"), "multipart/form-data")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"logo_url": "https://example.com/logo.png"}`))
+	}))
+	defer srv.Close()
+	defer setTestHTTPClient(srv)()
+
+	// Create a temporary file to upload
+	tmpFile, err := os.CreateTemp(t.TempDir(), "logo-*.png")
+	require.NoError(t, err)
+	_, err = tmpFile.WriteString("fake-png-content")
+	require.NoError(t, err)
+	require.NoError(t, tmpFile.Close())
+
+	stdout, _, err := executeRootCommand([]string{
+		"connector-builder-logo", "upload",
+		"--api-key", "test-key",
+		"--output", "json",
+		"--team-id", "123",
+		"--connector-identifier", "abc",
+		"--file", tmpFile.Name(),
+	})
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "logo.png")
+}
+
+func TestExecuteRequestNoContent_Error(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, `{"meta":{"request_id":"req1"},"error":{"code":"INVALID","message":"Bad input"}}`)
+	}))
+	defer srv.Close()
+
+	httpClient = srv.Client()
+	t.Cleanup(func() { httpClient = nil })
+
+	root := &cobra.Command{Use: "root"}
+	root.PersistentFlags().Bool("verbose", false, "")
+	root.PersistentFlags().Bool("no-retry", true, "")
+	root.PersistentFlags().Bool("quiet", false, "")
+	cmd := &cobra.Command{Use: "test"}
+	root.AddCommand(cmd)
+
+	err := executeRequestNoContent(cmd, "DELETE", srv.URL+"/resource/1", nil, "test-key", 10*time.Second, "Deleting...")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Bad input")
 }

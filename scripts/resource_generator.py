@@ -15,13 +15,26 @@ from spec_parser import find_operation
 GO_PACKAGE = "generated"
 
 
+def _file_var_name(var_prefix):
+    """Return the Go variable name for the --file flag."""
+    return f"{var_prefix}File"
+
+
 def _generate_flag_declarations(params, var_prefix, is_paginated):
     """Emit Go flag variable declarations for a command's parameters."""
     lines = []
+    has_file = False
     for param in params:
+        if param["in"] == "file":
+            has_file = True
+            continue
         var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
         var_type = go_var_type(param)
         lines.append(f"var {var_name} {var_type}")
+        if param["in"] == "body" and param["type"] == "object":
+            lines.append(f"var {var_name}File string")
+    if has_file:
+        lines.append(f"var {_file_var_name(var_prefix)} string")
     if is_paginated:
         lines.append(f"var {var_prefix}All bool")
         lines.append(f"var {var_prefix}Limit int")
@@ -45,27 +58,105 @@ def _generate_url_building(params, fixed_values, var_prefix, subdomain, path_pre
     return [f"\t\trequestURL := {url_expr}", ""]
 
 
+def _has_file_params(params):
+    """Return True if any parameter is a file upload."""
+    return any(p["in"] == "file" for p in params)
+
+
 def _generate_request_body(params, fixed_values, method, var_prefix, is_async):
-    """Emit Go code that builds the request body or query parameters."""
+    """Emit Go code that builds the request body or query parameters.
+
+    Returns (lines, body_var, content_type_var, multipart_info) where multipart_info
+    is a dict like {"field_name": "logo", "file_var": "filePath"} for multipart commands,
+    or None for non-multipart commands.
+    """
     lines = []
     method_upper = method.upper()
     body_params = [p for p in params if p["in"] == "body"]
     json_query_params = [p for p in params if p["in"] == "json_query"]
     query_params = [p for p in params if p["in"] == "query"]
+    file_params = [p for p in params if p["in"] == "file"]
+    form_field_params = [p for p in params if p["in"] == "form_field"]
 
     has_body = len(body_params) > 0 or (len(fixed_values) > 0 and method_upper in ("POST", "PUT", "PATCH"))
     has_json_query = len(json_query_params) > 0
+    has_multipart = len(file_params) > 0
 
     body_var = "nil"
+    content_type_var = ""
+    multipart_info = None
 
-    if has_body:
-        lines.append("\t\tbody := map[string]any{")
-        for param in body_params:
-            var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
-            lines.append(f'\t\t\t"{param["name"]}": {var_name},')
-        for fixed_name, fixed_val in fixed_values.items():
-            lines.append(f'\t\t\t"{fixed_name}": "{fixed_val}",')
+    if has_multipart:
+        if len(file_params) > 1:
+            names = ", ".join(p["name"] for p in file_params)
+            print(f"ERROR: multiple file params ({names}) — only one file param per command is supported", file=sys.stderr)
+            sys.exit(1)
+        file_param = file_params[0]
+        file_var = _file_var_name(var_prefix)
+
+        # Resolve file input (--file flag or stdin)
+        lines.append(f"\t\tfilePath, cleanup, err := resolveFileInput({file_var})")
+        lines.append("\t\tif err != nil {")
+        lines.append("\t\t\treturn err")
         lines.append("\t\t}")
+        lines.append("\t\tdefer cleanup()")
+        lines.append("")
+
+        # Build form fields map
+        if form_field_params:
+            lines.append("\t\tformFields := map[string]string{}")
+            for param in form_field_params:
+                var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
+                ft = go_flag_type(param)
+                if ft in ("int", "int64"):
+                    value_expr = f'fmt.Sprintf("%d", {var_name})'
+                elif ft == "float64":
+                    value_expr = f'fmt.Sprintf("%g", {var_name})'
+                elif ft == "bool":
+                    value_expr = f'fmt.Sprintf("%t", {var_name})'
+                elif ft == "string":
+                    value_expr = var_name
+                else:
+                    value_expr = f'fmt.Sprintf("%v", {var_name})'
+                if not param["required"] and ft == "string":
+                    lines.append(f'\t\tif {var_name} != "" {{')
+                    lines.append(f'\t\t\tformFields["{param["name"]}"] = {value_expr}')
+                    lines.append("\t\t}")
+                else:
+                    lines.append(f'\t\tformFields["{param["name"]}"] = {value_expr}')
+        else:
+            lines.append("\t\tformFields := map[string]string{}")
+        lines.append("")
+
+        body_var = "multipartBody"
+        content_type_var = "contentType"
+        multipart_info = {"field_name": file_param["name"], "file_var": "filePath"}
+    elif has_body:
+        object_params = [p for p in body_params if p["type"] == "object"]
+        simple_params = [p for p in body_params if p["type"] != "object"]
+        if object_params:
+            lines.append("\t\tbody := map[string]any{}")
+            for param in simple_params:
+                var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
+                lines.append(f'\t\tbody["{param["name"]}"] = {var_name}')
+            for param in object_params:
+                var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
+                flag_name = param["cli_flag"]
+                lines.append(f"\t\tvar {var_name}Parsed map[string]any")
+                lines.append(f"\t\tif err := json.Unmarshal([]byte({var_name}), &{var_name}Parsed); err != nil {{")
+                lines.append(f'\t\t\treturn fmt.Errorf("--{flag_name} must be a JSON object: %w", err)')
+                lines.append("\t\t}")
+                lines.append(f'\t\tbody["{param["name"]}"] = {var_name}Parsed')
+            for fixed_name, fixed_val in fixed_values.items():
+                lines.append(f'\t\tbody["{fixed_name}"] = "{fixed_val}"')
+        else:
+            lines.append("\t\tbody := map[string]any{")
+            for param in body_params:
+                var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
+                lines.append(f'\t\t\t"{param["name"]}": {var_name},')
+            for fixed_name, fixed_val in fixed_values.items():
+                lines.append(f'\t\t\t"{fixed_name}": "{fixed_val}",')
+            lines.append("\t\t}")
         lines.append("\t\tbodyJSON, err := json.Marshal(body)")
         lines.append("\t\tif err != nil {")
         lines.append('\t\t\treturn fmt.Errorf("failed to encode request body: %w", err)')
@@ -107,24 +198,53 @@ def _generate_request_body(params, fixed_values, method, var_prefix, is_async):
                 lines.append(f"\t\tif {var_name} != 0 {{")
                 lines.append(f'\t\t\tq.Set("{param["name"]}", fmt.Sprintf("%d", {var_name}))')
                 lines.append("\t\t}")
+            elif ft == "bool":
+                lines.append(f"\t\tif {var_name} {{")
+                lines.append(f'\t\t\tq.Set("{param["name"]}", "true")')
+                lines.append("\t\t}")
         lines.append('\t\tif encoded := q.Encode(); encoded != "" {')
         lines.append('\t\t\trequestURL += "?" + encoded')
         lines.append("\t\t}")
         lines.append("")
 
-    return lines, body_var
+    return lines, body_var, content_type_var, multipart_info
 
 
-def _generate_execution(cmd_config, var_prefix, subdomain, path_prefix, timeout_expr, body_var):  # noqa: PLR0913
-    """Emit Go code for request execution (sync/async/paginated/wait)."""
+def _generate_execution(cmd_config, var_prefix, subdomain, path_prefix, timeout_expr, body_var, content_type_var=""):  # noqa: PLR0913
+    """Emit Go code for request execution (sync/async/paginated/wait/no_content)."""
     lines = []
     is_async = cmd_config.get("async", False)
     is_paginated = cmd_config.get("paginated", False)
     has_wait = cmd_config.get("wait", False)
+    is_no_content = cmd_config.get("no_content", False)
     spinner_text = cmd_config.get("spinner_text", "Processing...")
+    is_multipart = bool(content_type_var)
+
+    if is_no_content and is_multipart:
+        method = cmd_config.get("_method_upper", "PUT")
+        lines.append(f"\t\ttimeout := resolveTimeout(cmd, {timeout_expr})")
+        lines.append(f'\t\tif err := executeMultipartRequestNoContent(cmd, "{method}", requestURL, {body_var}, {content_type_var}, apiKey, timeout, "{spinner_text}"); err != nil {{')
+        lines.append("\t\t\treturn err")
+        lines.append("\t\t}")
+        lines.append("\t\treturn nil")
+        return lines
+
+    if is_no_content:
+        method = cmd_config.get("_method_upper", "GET")
+        done_message = cmd_config.get("done_message", "Done.")
+        lines.append(f"\t\ttimeout := resolveTimeout(cmd, {timeout_expr})")
+        lines.append(f'\t\tif err := executeRequestNoContent(cmd, "{method}", requestURL, {body_var}, apiKey, timeout, "{spinner_text}"); err != nil {{')
+        lines.append("\t\t\treturn err")
+        lines.append("\t\t}")
+        lines.append(f'\t\tfmt.Fprintln(cli.InfoWriterErr(cmd), "{done_message}")')
+        lines.append("\t\treturn nil")
+        return lines
 
     lines.append(f"\t\ttimeout := resolveTimeout(cmd, {timeout_expr})")
-    if is_async and is_paginated:
+    if is_multipart:
+        method = cmd_config.get("_method_upper", "POST")
+        lines.append(f'\t\tresult, err := executeMultipartRequest(cmd, "{method}", requestURL, {body_var}, {content_type_var}, apiKey, timeout, "{spinner_text}")')
+    elif is_async and is_paginated:
         lines.append("\t\tvar result any")
         lines.append(f"\t\tif {var_prefix}All || {var_prefix}Limit > 0 {{")
         lines.append(f'\t\t\tresult, err = executeAsyncQueryPaginated(cmd, baseURL, requestURL, jsonParams, apiKey, timeout, "{spinner_text}", {var_prefix}All, {var_prefix}Limit)')
@@ -173,15 +293,28 @@ def _generate_execution(cmd_config, var_prefix, subdomain, path_prefix, timeout_
 def _generate_init_flags(params, cmd_config, cmd_var, var_prefix):
     """Emit Go code for flag registration in init()."""
     lines = []
+    secure_params = set(cmd_config.get("secure_input", []))
+    has_file = False
     for param in params:
         if param["in"] == "path":
+            continue
+        if param["in"] == "file":
+            has_file = True
             continue
         var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
         flag_func = go_flag_func(param)
         flag_name = param["cli_flag"]
         desc = param["description"].replace('"', '\\"')
+        if param["name"] in secure_params:
+            desc += " (leave empty for secure prompt)"
         zero = go_zero_value(param)
         lines.append(f'\t{cmd_var}.Flags().{flag_func}(&{var_name}, "{flag_name}", {zero}, "{desc}")')
+        if param["in"] == "body" and param["type"] == "object":
+            lines.append(f'\t{cmd_var}.Flags().StringVar(&{var_name}File, "{flag_name}-file", "", "Path to JSON file for --{flag_name}")')
+
+    if has_file:
+        file_var = _file_var_name(var_prefix)
+        lines.append(f'\t{cmd_var}.Flags().StringVar(&{file_var}, "file", "", "Path to file (reads from stdin if not provided)")')
 
     path_params = [p for p in params if p["in"] == "path"]
     for param in path_params:
@@ -189,6 +322,8 @@ def _generate_init_flags(params, cmd_config, cmd_var, var_prefix):
         flag_func = go_flag_func(param)
         flag_name = param["cli_flag"]
         desc = param["description"].replace('"', '\\"')
+        if param["name"] in secure_params:
+            desc += " (leave empty for secure prompt)"
         zero = go_zero_value(param)
         lines.append(f'\t{cmd_var}.Flags().{flag_func}(&{var_name}, "{flag_name}", {zero}, "{desc}")')
 
@@ -203,7 +338,8 @@ def _generate_init_flags(params, cmd_config, cmd_var, var_prefix):
         lines.append(f'\t{cmd_var}.Flags().IntVar(&{var_prefix}Limit, "limit", 0, "Maximum number of data rows to return")')
 
     for param in params:
-        if param["required"]:
+        has_file_companion = param["in"] == "body" and param["type"] == "object"
+        if param["required"] and param["name"] not in secure_params and param["in"] != "file" and not has_file_companion:
             flag_name = param["cli_flag"]
             lines.append(f'\t_ = {cmd_var}.MarkFlagRequired("{flag_name}")')
 
@@ -227,11 +363,14 @@ def generate_resource_file(resource_name, resource_config, spec, servers):
     lines.append('\t"encoding/json"')
     lines.append('\t"fmt"')
     lines.append('\t"net/url"')
+    lines.append('\t"os"')
     lines.append('\t"strings"')
     lines.append('\t"time"')
     lines.append("")
     lines.append('\t"github.com/spf13/cobra"')
+    lines.append('\t"golang.org/x/term"')
     lines.append("")
+    lines.append('\t"github.com/supermetrics-public/supermetrics-cli/internal/cli"')
     lines.append('\t"github.com/supermetrics-public/supermetrics-cli/internal/exitcode"')
     lines.append('\t"github.com/supermetrics-public/supermetrics-cli/internal/httpclient"')
     lines.append(")")
@@ -283,10 +422,41 @@ def generate_resource_file(resource_name, resource_config, spec, servers):
         lines.append("\t\t}")
         lines.append("")
 
+        # File input for object body params (--param-file reads JSON from file)
+        object_body_params = [p for p in params if p["in"] == "body" and p["type"] == "object"]
+        for param in object_body_params:
+            var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
+            flag_name = param["cli_flag"]
+            lines.append(f'\t\tif {var_name} == "" && {var_name}File != "" {{')
+            lines.append(f"\t\t\tfileData, err := os.ReadFile({var_name}File)")
+            lines.append("\t\t\tif err != nil {")
+            lines.append(f'\t\t\t\treturn fmt.Errorf("failed to read --{flag_name}-file: %w", err)')
+            lines.append("\t\t\t}")
+            lines.append(f"\t\t\t{var_name} = string(fileData)")
+            lines.append("\t\t}")
+        if object_body_params:
+            lines.append("")
+
         # Required param validation
+        secure_params = set(cmd_config.get("secure_input", []))
+
+        # Guard: secure_input and file upload cannot coexist (both read stdin)
+        if secure_params and _has_file_params(params):
+            print(
+                f"ERROR: command '{cmd_name}' combines secure_input and file upload — "
+                f"both read stdin, which causes conflicts",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        if is_async and _has_file_params(params):
+            print(f"WARNING: command '{cmd_name}' combines async and file upload — async behavior will be ignored for multipart", file=sys.stderr)
+
+        if cmd_config.get("wait", False) and _has_file_params(params):
+            print(f"WARNING: command '{cmd_name}' combines wait and file upload — wait behavior will be ignored for multipart", file=sys.stderr)
         required_string_params = [
             p for p in params
-            if p["required"] and go_flag_type(p) == "string"
+            if p["required"] and go_flag_type(p) == "string" and p["name"] not in secure_params and p["in"] != "file"
         ]
         for param in required_string_params:
             var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
@@ -297,18 +467,39 @@ def generate_resource_file(resource_name, resource_config, spec, servers):
         if required_string_params:
             lines.append("")
 
+        # Secure input prompting (before URL building, after param validation)
+        for param in params:
+            if param["name"] in secure_params:
+                var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
+                flag_name = param["cli_flag"]
+                lines.append(f'\t\tif {var_name} == "" {{')
+                lines.append(f'\t\t\tval, err := readSecureInput(cmd, "{flag_name}")')
+                lines.append("\t\t\tif err != nil {")
+                lines.append("\t\t\t\treturn err")
+                lines.append("\t\t\t}")
+                lines.append('\t\t\tif val == "" {')
+                lines.append(f'\t\t\t\treturn exitcode.Wrap(fmt.Errorf("--{flag_name} is required (provide via flag or stdin)"), exitcode.Usage)')
+                lines.append("\t\t\t}")
+                lines.append(f"\t\t\t{var_name} = val")
+                lines.append("\t\t}")
+                lines.append("")
+
         # URL building
         lines.extend(_generate_url_building(params, fixed_values, var_prefix, subdomain, path_prefix, path))
 
         # Request body/query params
         method_upper = method.upper()
-        body_lines, body_var = _generate_request_body(params, fixed_values, method, var_prefix, is_async)
+        is_multipart = _has_file_params(params)
+        body_lines, body_var, content_type_var, multipart_info = _generate_request_body(params, fixed_values, method, var_prefix, is_async)
         lines.extend(body_lines)
 
         # Dry-run
         if has_dry_run:
             lines.append('\t\tif dryRun, _ := cmd.Flags().GetBool("dry-run"); dryRun {')
-            lines.append(f'\t\t\tdryRunRequest(cmd, "{method_upper}", requestURL, {body_var})')
+            if is_multipart:
+                lines.append(f'\t\t\tfmt.Fprintf(cmd.ErrOrStderr(), "%s %s\\nFile: %s\\n", "{method_upper}", requestURL, filePath)')
+            else:
+                lines.append(f'\t\t\tdryRunRequest(cmd, "{method_upper}", requestURL, {body_var})')
             lines.append("\t\t\treturn nil")
             lines.append("\t\t}")
             lines.append("")
@@ -330,9 +521,17 @@ def generate_resource_file(resource_name, resource_config, spec, servers):
             lines.append("\t\t}")
             lines.append("")
 
+        if multipart_info:
+            field_name = multipart_info["field_name"]
+            lines.append(f'\t\tmultipartBody, contentType, err := buildMultipartStream(filePath, "{field_name}", formFields)')
+            lines.append("\t\tif err != nil {")
+            lines.append('\t\t\treturn fmt.Errorf("failed to build multipart stream: %w", err)')
+            lines.append("\t\t}")
+            lines.append("")
+
         # Execution — pass method_upper through cmd_config for the helper
         cmd_config_with_method = {**cmd_config, "_method_upper": method_upper}
-        lines.extend(_generate_execution(cmd_config_with_method, var_prefix, subdomain, path_prefix, timeout_expr, body_var))
+        lines.extend(_generate_execution(cmd_config_with_method, var_prefix, subdomain, path_prefix, timeout_expr, body_var, content_type_var))
 
         lines.append("\t},")
         lines.append("}")
