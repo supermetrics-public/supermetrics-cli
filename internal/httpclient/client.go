@@ -12,9 +12,9 @@ import (
 	"github.com/supermetrics-public/supermetrics-cli/internal/buildcfg"
 )
 
-// userAgent identifies the CLI to the API so the backend can attribute requests
-// to their source (e.g. the cb_request_source event property). The "supermetrics-cli"
-// prefix is matched server-side — do not rename it without coordinating the backend.
+// userAgent identifies the CLI to the API so requests can be attributed to their
+// source. The "supermetrics-cli" prefix is matched server-side — do not rename it
+// without coordinating with the backend.
 var userAgent = "supermetrics-cli/" + buildcfg.Version
 
 const (
