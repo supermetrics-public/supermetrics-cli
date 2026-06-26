@@ -10,12 +10,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/supermetrics-public/supermetrics-cli/internal/buildcfg"
 )
 
 func TestDo_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "Bearer test-key", r.Header.Get("Authorization"))
 		assert.Equal(t, "application/json", r.Header.Get("Accept"))
+		assert.True(t, strings.HasPrefix(r.Header.Get("User-Agent"), "supermetrics-cli/"))
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok"}`))
 	}))
@@ -34,6 +36,20 @@ func TestDo_Success(t *testing.T) {
 	m, ok := result.(map[string]any)
 	require.True(t, ok, "expected map[string]any")
 	assert.Equal(t, "ok", m["status"])
+}
+
+func TestDo_UserAgent(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Get("User-Agent")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	_, err := Do(context.Background(), Request{Method: "GET", URL: srv.URL, APIKey: "k"})
+	require.NoError(t, err)
+	assert.Equal(t, "supermetrics-cli/"+buildcfg.Version, got)
 }
 
 func TestDo_AuthError(t *testing.T) {
