@@ -8,7 +8,14 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/supermetrics-public/supermetrics-cli/internal/buildcfg"
 )
+
+// userAgent identifies the CLI to the API so requests can be attributed to their
+// source. The "supermetrics-cli" prefix is matched server-side — do not rename it
+// without coordinating with the backend.
+var userAgent = "supermetrics-cli/" + buildcfg.Version
 
 const (
 	DefaultTimeout = 30 * time.Second
@@ -54,6 +61,7 @@ func Do(ctx context.Context, r Request) (*Response, error) {
 
 	req.Header.Set("Authorization", "Bearer "+r.APIKey)
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", userAgent)
 	if r.Body != nil {
 		ct := "application/json"
 		if r.ContentType != "" {
