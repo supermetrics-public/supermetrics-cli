@@ -1,6 +1,23 @@
 """Map OpenAPI types to Go equivalents — flag types, flag functions, zero values, var types, timeouts."""
 
 
+def go_string_escape(text):
+    """Escape a string for safe embedding inside a Go double-quoted string literal.
+
+    Handles backslashes, double quotes, and control characters (newlines, tabs, carriage
+    returns) so multi-line OpenAPI descriptions do not break the generated Go source.
+    """
+    if text is None:
+        return ""
+    return (
+        text.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\r", "\\r")
+        .replace("\n", "\\n")
+        .replace("\t", "\\t")
+    )
+
+
 def go_flag_type(param):
     """Map parameter type to Go flag type."""
     t = param["type"]
