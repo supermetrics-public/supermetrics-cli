@@ -29,6 +29,24 @@ func profileConfig(profileName string, profile *config.Profile) *config.Config {
 	}
 }
 
+// withTempConfig isolates the config directory to a fresh temp dir for the test.
+// config.Dir() resolves via os.UserConfigDir(), which honours XDG_CONFIG_HOME on
+// Linux but uses $HOME/Library/Application Support on macOS, so override both —
+// otherwise the tests read the developer's real config on macOS.
+func withTempConfig(t *testing.T) string {
+	t.Helper()
+	tmpDir := t.TempDir()
+	origXDG := os.Getenv("XDG_CONFIG_HOME")
+	origHome := os.Getenv("HOME")
+	t.Cleanup(func() {
+		os.Setenv("XDG_CONFIG_HOME", origXDG)
+		os.Setenv("HOME", origHome)
+	})
+	os.Setenv("XDG_CONFIG_HOME", tmpDir)
+	os.Setenv("HOME", tmpDir)
+	return tmpDir
+}
+
 func TestResolveToken_FlagTakesPriority(t *testing.T) {
 	key, err := ResolveToken("flag-key", stubEnv(map[string]string{
 		EnvAPIKey: "env-key",
@@ -46,10 +64,7 @@ func TestResolveToken_EnvFallback(t *testing.T) {
 }
 
 func TestResolveToken_NoKeyError(t *testing.T) {
-	tmpDir := t.TempDir()
-	origHome := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	defer os.Setenv("XDG_CONFIG_HOME", origHome)
+	withTempConfig(t)
 
 	_, err := ResolveToken("", stubEnv(map[string]string{}), "supermetrics.com", testOAuthCfg, config.DefaultProfile)
 	require.Error(t, err)
@@ -57,10 +72,7 @@ func TestResolveToken_NoKeyError(t *testing.T) {
 }
 
 func TestResolveToken_OAuthTokenUsed(t *testing.T) {
-	tmpDir := t.TempDir()
-	origHome := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	defer os.Setenv("XDG_CONFIG_HOME", origHome)
+	withTempConfig(t)
 
 	cfg := profileConfig(config.DefaultProfile, &config.Profile{
 		AccessToken: "oauth-token",
@@ -74,10 +86,7 @@ func TestResolveToken_OAuthTokenUsed(t *testing.T) {
 }
 
 func TestResolveToken_OAuthTakesPrecedenceOverAPIKey(t *testing.T) {
-	tmpDir := t.TempDir()
-	origHome := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	defer os.Setenv("XDG_CONFIG_HOME", origHome)
+	withTempConfig(t)
 
 	cfg := profileConfig(config.DefaultProfile, &config.Profile{
 		APIKey:      "api-key-123",
@@ -92,10 +101,7 @@ func TestResolveToken_OAuthTakesPrecedenceOverAPIKey(t *testing.T) {
 }
 
 func TestResolveToken_FlagOverridesOAuth(t *testing.T) {
-	tmpDir := t.TempDir()
-	origHome := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	defer os.Setenv("XDG_CONFIG_HOME", origHome)
+	withTempConfig(t)
 
 	cfg := profileConfig(config.DefaultProfile, &config.Profile{
 		AccessToken: "oauth-token",
@@ -109,10 +115,7 @@ func TestResolveToken_FlagOverridesOAuth(t *testing.T) {
 }
 
 func TestResolveToken_ExpiredTokenWithoutRefreshErrors(t *testing.T) {
-	tmpDir := t.TempDir()
-	origHome := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	defer os.Setenv("XDG_CONFIG_HOME", origHome)
+	withTempConfig(t)
 
 	cfg := profileConfig(config.DefaultProfile, &config.Profile{
 		AccessToken: "expired-token",
@@ -126,10 +129,7 @@ func TestResolveToken_ExpiredTokenWithoutRefreshErrors(t *testing.T) {
 }
 
 func TestResolveToken_FallsBackToAPIKey(t *testing.T) {
-	tmpDir := t.TempDir()
-	origHome := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	defer os.Setenv("XDG_CONFIG_HOME", origHome)
+	withTempConfig(t)
 
 	cfg := profileConfig(config.DefaultProfile, &config.Profile{APIKey: "fallback-key"})
 	require.NoError(t, config.Save(cfg))
@@ -140,10 +140,7 @@ func TestResolveToken_FallsBackToAPIKey(t *testing.T) {
 }
 
 func TestResolveToken_EmptyEnvIgnored(t *testing.T) {
-	tmpDir := t.TempDir()
-	origHome := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	defer os.Setenv("XDG_CONFIG_HOME", origHome)
+	tmpDir := withTempConfig(t)
 
 	// Empty string env var should be ignored
 	_, err := ResolveToken("", stubEnv(map[string]string{
@@ -158,10 +155,7 @@ func TestResolveToken_EmptyEnvIgnored(t *testing.T) {
 }
 
 func TestResolveToken_ExpiredTokenRefreshSuccess(t *testing.T) {
-	tmpDir := t.TempDir()
-	origHome := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	defer os.Setenv("XDG_CONFIG_HOME", origHome)
+	withTempConfig(t)
 
 	cfg := profileConfig(config.DefaultProfile, &config.Profile{
 		AccessToken:  "expired-token",
@@ -199,10 +193,7 @@ func TestResolveToken_ExpiredTokenRefreshSuccess(t *testing.T) {
 }
 
 func TestResolveToken_ExpiredTokenRefreshFails(t *testing.T) {
-	tmpDir := t.TempDir()
-	origHome := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	defer os.Setenv("XDG_CONFIG_HOME", origHome)
+	withTempConfig(t)
 
 	cfg := profileConfig(config.DefaultProfile, &config.Profile{
 		AccessToken:  "expired-token",
@@ -234,10 +225,7 @@ func TestResolveToken_ExpiredTokenRefreshFails(t *testing.T) {
 }
 
 func TestResolveToken_RefreshKeepsExistingRefreshToken(t *testing.T) {
-	tmpDir := t.TempDir()
-	origHome := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	defer os.Setenv("XDG_CONFIG_HOME", origHome)
+	withTempConfig(t)
 
 	cfg := profileConfig(config.DefaultProfile, &config.Profile{
 		AccessToken:  "expired-token",
@@ -269,10 +257,7 @@ func TestResolveToken_RefreshKeepsExistingRefreshToken(t *testing.T) {
 }
 
 func TestResolveToken_NamedProfile(t *testing.T) {
-	tmpDir := t.TempDir()
-	origHome := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	defer os.Setenv("XDG_CONFIG_HOME", origHome)
+	withTempConfig(t)
 
 	cfg := &config.Config{
 		Profiles: map[string]*config.Profile{
