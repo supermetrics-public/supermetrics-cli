@@ -15,7 +15,7 @@ import (
 func newTestUpdater(
 	latest func(ctx context.Context) (*ReleaseInfo, bool, error),
 	detect func(ctx context.Context, version string) (*ReleaseInfo, bool, error),
-	updateFn func(ctx context.Context, assetURL, assetName, execPath string) error,
+	updateFn func(ctx context.Context, rel *ReleaseInfo, execPath string) error,
 ) *Updater {
 	return &Updater{
 		latestRelease: latest,
@@ -24,7 +24,7 @@ func newTestUpdater(
 	}
 }
 
-func noopUpdate(_ context.Context, _, _, _ string) error { return nil }
+func noopUpdate(_ context.Context, _ *ReleaseInfo, _ string) error { return nil }
 
 // --- Upgrade tests ---
 
@@ -33,7 +33,7 @@ func TestUpgrade(t *testing.T) {
 		name           string
 		currentVersion string
 		latest         func(ctx context.Context) (*ReleaseInfo, bool, error)
-		updateFn       func(ctx context.Context, assetURL, assetName, execPath string) error
+		updateFn       func(ctx context.Context, rel *ReleaseInfo, execPath string) error
 		wantErr        string
 		wantOutput     string
 		wantNoUpdate   bool // expect updateBinary NOT called
@@ -87,7 +87,7 @@ func TestUpgrade(t *testing.T) {
 			latest: func(_ context.Context) (*ReleaseInfo, bool, error) {
 				return &ReleaseInfo{Version: "2.0.0", AssetURL: "https://example.com/bin", AssetName: "supermetrics"}, true, nil
 			},
-			updateFn: func(_ context.Context, _, _, _ string) error {
+			updateFn: func(_ context.Context, _ *ReleaseInfo, _ string) error {
 				return fmt.Errorf("permission denied")
 			},
 			wantErr: "upgrade failed",
@@ -102,15 +102,15 @@ func TestUpgrade(t *testing.T) {
 				updateFn = noopUpdate
 			}
 			if updateFn == nil {
-				updateFn = func(_ context.Context, _, _, _ string) error {
+				updateFn = func(_ context.Context, _ *ReleaseInfo, _ string) error {
 					updateCalled = true
 					return nil
 				}
 			} else if tt.wantNoUpdate {
 				origFn := updateFn
-				updateFn = func(ctx context.Context, a, b, c string) error {
+				updateFn = func(ctx context.Context, rel *ReleaseInfo, execPath string) error {
 					updateCalled = true
-					return origFn(ctx, a, b, c)
+					return origFn(ctx, rel, execPath)
 				}
 			}
 
@@ -139,9 +139,9 @@ func TestUpgrade_PassesCorrectArgs(t *testing.T) {
 			return &ReleaseInfo{Version: "2.0.0", AssetURL: "https://cdn.example.com/v2", AssetName: "supermetrics-linux-amd64"}, true, nil
 		},
 		nil,
-		func(_ context.Context, assetURL, assetName, _ string) error {
-			gotURL = assetURL
-			gotName = assetName
+		func(_ context.Context, rel *ReleaseInfo, _ string) error {
+			gotURL = rel.AssetURL
+			gotName = rel.AssetName
 			return nil
 		},
 	)
@@ -159,7 +159,7 @@ func TestForceReinstall(t *testing.T) {
 		name           string
 		currentVersion string
 		detect         func(ctx context.Context, version string) (*ReleaseInfo, bool, error)
-		updateFn       func(ctx context.Context, assetURL, assetName, execPath string) error
+		updateFn       func(ctx context.Context, rel *ReleaseInfo, execPath string) error
 		wantErr        string
 		wantOutput     string
 	}{
@@ -194,7 +194,7 @@ func TestForceReinstall(t *testing.T) {
 			detect: func(_ context.Context, ver string) (*ReleaseInfo, bool, error) {
 				return &ReleaseInfo{Version: ver, AssetURL: "https://example.com/bin", AssetName: "supermetrics"}, true, nil
 			},
-			updateFn: func(_ context.Context, _, _, _ string) error {
+			updateFn: func(_ context.Context, _ *ReleaseInfo, _ string) error {
 				return fmt.Errorf("disk full")
 			},
 			wantErr: "reinstall failed",
