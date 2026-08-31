@@ -32,11 +32,10 @@ itself). The CI workflow handles this sequencing.
 ```
 Steps:
   1. Checkout with full history (fetch-depth: 0, needed for changelog)
-  2. Setup Go 1.26
-  3. Install tools: goimports
-  4. make generate
-  5. make test
-  6. Run GoReleaser (goreleaser/goreleaser-action@v6)
+  2. Install toolchain via mise (Go, Python, uv, goimports)
+  3. make generate
+  4. make test
+  5. Run GoReleaser (goreleaser/goreleaser-action@v6)
      - Uses GITHUB_TOKEN for GitHub Releases
      - Uses HOMEBREW_TAP_TOKEN for Homebrew tap push
 ```
