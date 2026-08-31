@@ -26,6 +26,8 @@ ignore = [
     "T201",    # print statements — generator uses print for stderr output
     "S101",    # assert — used in tests
     "E501",    # line too long — Go code generation has long string literals
+    "PLR0917", # too many positional args — generator is inherently complex
+    "CPY001",  # copyright notice — not used in this repo
 ]
 
 [tool.ruff.lint.per-file-ignores]
