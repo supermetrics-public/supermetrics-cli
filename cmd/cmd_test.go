@@ -175,9 +175,17 @@ func TestReadLine_EOF(t *testing.T) {
 func withTempConfig(t *testing.T) {
 	t.Helper()
 	tmpDir := t.TempDir()
-	orig := os.Getenv("XDG_CONFIG_HOME")
-	t.Cleanup(func() { os.Setenv("XDG_CONFIG_HOME", orig) })
+	origXDG := os.Getenv("XDG_CONFIG_HOME")
+	origHome := os.Getenv("HOME")
+	t.Cleanup(func() {
+		os.Setenv("XDG_CONFIG_HOME", origXDG)
+		os.Setenv("HOME", origHome)
+	})
+	// config.Dir() resolves via os.UserConfigDir(), which honours XDG_CONFIG_HOME on
+	// Linux but uses $HOME/Library/Application Support on macOS. Override both so the
+	// tests isolate on every platform instead of reading the real user config.
 	os.Setenv("XDG_CONFIG_HOME", tmpDir)
+	os.Setenv("HOME", tmpDir)
 }
 
 func TestPrintLoginStatus_NotLoggedIn(t *testing.T) {

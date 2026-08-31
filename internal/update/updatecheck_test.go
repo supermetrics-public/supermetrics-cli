@@ -18,9 +18,18 @@ import (
 func withTempConfig(t *testing.T) func() {
 	t.Helper()
 	tmpDir := t.TempDir()
-	orig := os.Getenv("XDG_CONFIG_HOME")
+	origXDG := os.Getenv("XDG_CONFIG_HOME")
+	origHome := os.Getenv("HOME")
+	// config.Dir() resolves via os.UserConfigDir(), which honours XDG_CONFIG_HOME
+	// on Linux but on macOS uses $HOME/Library/Application Support and ignores XDG.
+	// Override both so the tests isolate to tmpDir on every platform instead of
+	// reading the developer's real config (which makes the *_NoConfig tests flaky).
 	os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	return func() { os.Setenv("XDG_CONFIG_HOME", orig) }
+	os.Setenv("HOME", tmpDir)
+	return func() {
+		os.Setenv("XDG_CONFIG_HOME", origXDG)
+		os.Setenv("HOME", origHome)
+	}
 }
 
 func withTTY(t *testing.T) {

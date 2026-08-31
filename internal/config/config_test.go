@@ -13,9 +13,17 @@ import (
 func withTempConfig(t *testing.T) func() {
 	t.Helper()
 	tmpDir := t.TempDir()
-	orig := os.Getenv("XDG_CONFIG_HOME")
+	origXDG := os.Getenv("XDG_CONFIG_HOME")
+	origHome := os.Getenv("HOME")
+	// Dir() resolves via os.UserConfigDir(), which honours XDG_CONFIG_HOME on Linux
+	// but uses $HOME/Library/Application Support on macOS. Override both so the tests
+	// isolate on every platform instead of reading the real user config.
 	os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	return func() { os.Setenv("XDG_CONFIG_HOME", orig) }
+	os.Setenv("HOME", tmpDir)
+	return func() {
+		os.Setenv("XDG_CONFIG_HOME", origXDG)
+		os.Setenv("HOME", origHome)
+	}
 }
 
 func TestLoadEmpty(t *testing.T) {
