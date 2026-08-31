@@ -82,7 +82,10 @@ The generator (`scripts/generate_commands.py`) produces Cobra commands that use 
   semicolons for primitive arrays). Table flattens only with `--flatten`. `NO_COLOR` / `--no-color` support.
   Client-side `--fields` filtering in `fields.go` with dot-notation (e.g. `id,error.message`), applied in `Print()`
   before format dispatch
-- `internal/update/` — background update checking and self-update via GitHub Releases
+- `internal/update/` — background update checking and self-update via GitHub Releases. `github.go` queries the
+  GitHub Releases API directly (no third-party client) and picks the archive matching `runtime.GOOS`/`GOARCH`;
+  `apply.go` verifies the archive's sha256 against the release's `checksums.txt` before extracting the binary and
+  handing it to `github.com/minio/selfupdate` for the atomic replace
 - `internal/exitcode/` — BSD sysexits exit codes (Usage=64, Auth=65, Unavailable=69) with `Wrap`/`Of` helpers
 
 ## Key conventions
@@ -145,3 +148,9 @@ The generator (`scripts/generate_commands.py`) produces Cobra commands that use 
   `TestLoadMalformedJSON`
 - **No binary-level E2E tests**: Generated command tests exercise the full path (flag parsing → HTTP → response
   formatting) with test servers. True binary E2E adds build/exec/parse overhead for marginal gain over existing coverage
+- **Self-update release discovery is hand-rolled**: `go-selfupdate` was dropped because it links
+  `golang.org/x/crypto/openpgp` (GO-2026-5932, frozen upstream with no fix) into every binary, and it pulled ~12
+  indirect deps (gitea SDK, gitlab client, go-github, oauth2…) for three API calls. Every maintained GitHub-release
+  library has the same openpgp problem or is abandoned, so discovery lives in `internal/update/github.go` and only the
+  binary swap is delegated to `minio/selfupdate`. Do not reintroduce a release-discovery library without checking its
+  crypto deps
