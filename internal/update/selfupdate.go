@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-
-	selfupdate "github.com/creativeprojects/go-selfupdate"
 )
 
 const (
@@ -19,51 +17,49 @@ const (
 	GitHubRepo = "supermetrics-cli"
 )
 
-var repo = selfupdate.NewRepositorySlug(GitHubOwner, GitHubRepo)
-
-// ReleaseInfo holds the fields we need from a release.
-// Exists because go-selfupdate's Release has an unexported version field,
-// making it impossible to construct in tests.
+// ReleaseInfo holds the fields we need from a GitHub release: the archive for
+// the running platform and the checksums file used to verify it.
 type ReleaseInfo struct {
-	Version   string // e.g. "1.2.3" (no "v" prefix)
-	AssetURL  string
-	AssetName string
+	Version     string // e.g. "1.2.3" (no "v" prefix)
+	AssetURL    string
+	AssetName   string
+	ChecksumURL string
 }
 
 // Updater performs version checks and self-updates. The function fields
-// are injectable for testing; NewUpdater wires the real go-selfupdate calls.
+// are injectable for testing; NewUpdater wires the real GitHub calls.
 type Updater struct {
 	latestRelease func(ctx context.Context) (*ReleaseInfo, bool, error)
 	detectVersion func(ctx context.Context, version string) (*ReleaseInfo, bool, error)
-	updateBinary  func(ctx context.Context, assetURL, assetName, execPath string) error
+	updateBinary  func(ctx context.Context, rel *ReleaseInfo, execPath string) error
 }
 
-// NewUpdater creates an Updater wired to real GitHub Releases via go-selfupdate.
+// NewUpdater creates an Updater wired to the GitHub Releases API.
 func NewUpdater() *Updater {
+	client := newHTTPClient()
+
+	fetch := func(ctx context.Context, path string) (*ReleaseInfo, bool, error) {
+		rel, found, err := fetchRelease(ctx, client, path)
+		if err != nil || !found {
+			return nil, found, err
+		}
+		info, err := releaseInfo(rel)
+		if err != nil {
+			return nil, true, err
+		}
+		return info, true, nil
+	}
+
 	return &Updater{
 		latestRelease: func(ctx context.Context) (*ReleaseInfo, bool, error) {
-			rel, found, err := selfupdate.DetectLatest(ctx, repo)
-			if err != nil || !found {
-				return nil, found, err
-			}
-			return &ReleaseInfo{
-				Version:   rel.Version(),
-				AssetURL:  rel.AssetURL,
-				AssetName: rel.AssetName,
-			}, true, nil
+			return fetch(ctx, "/releases/latest")
 		},
 		detectVersion: func(ctx context.Context, version string) (*ReleaseInfo, bool, error) {
-			rel, found, err := selfupdate.DetectVersion(ctx, repo, version)
-			if err != nil || !found {
-				return nil, found, err
-			}
-			return &ReleaseInfo{
-				Version:   rel.Version(),
-				AssetURL:  rel.AssetURL,
-				AssetName: rel.AssetName,
-			}, true, nil
+			return fetch(ctx, "/releases/tags/v"+strings.TrimPrefix(version, "v"))
 		},
-		updateBinary: selfupdate.UpdateTo,
+		updateBinary: func(ctx context.Context, rel *ReleaseInfo, execPath string) error {
+			return applyUpdate(ctx, client, rel, execPath)
+		},
 	}
 }
 
@@ -99,7 +95,7 @@ func (u *Updater) Upgrade(ctx context.Context, w io.Writer, currentVersion strin
 		return fmt.Errorf("failed to resolve executable path: %w", err)
 	}
 
-	if err := u.updateBinary(ctx, latest.AssetURL, latest.AssetName, exe); err != nil {
+	if err := u.updateBinary(ctx, latest, exe); err != nil {
 		return fmt.Errorf("upgrade failed: %w", err)
 	}
 
@@ -130,7 +126,7 @@ func (u *Updater) ForceReinstall(ctx context.Context, w io.Writer, currentVersio
 	}
 
 	fmt.Fprintf(w, "Reinstalling supermetrics v%s...\n", currentClean)
-	if err := u.updateBinary(ctx, release.AssetURL, release.AssetName, exe); err != nil {
+	if err := u.updateBinary(ctx, release, exe); err != nil {
 		return fmt.Errorf("reinstall failed: %w", err)
 	}
 
