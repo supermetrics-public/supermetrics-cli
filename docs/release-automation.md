@@ -8,18 +8,18 @@ Key settings:
   - `linux/amd64`, `linux/arm64`
   - `darwin/amd64`, `darwin/arm64`
   - `windows/amd64`
-- **Ldflags**: Inject version, commit, and build date into `cmd.Version`, `cmd.Commit`, `cmd.BuildDate` (same ldflags
+- **Ldflags**: Inject version, commit, build date and the OAuth client config into `internal/buildcfg` (same ldflags
   pattern as the Makefile).
 - **Archives**: `.tar.gz` for linux/darwin, `.zip` for windows. Each archive contains the binary plus `README.md` and
   `LICENSE`.
-- **Checksum**: `checksums.txt` with SHA256 — used by `go-selfupdate` for verification during
-  `supermetrics version upgrade`.
+- **Checksum**: `checksums.txt` with SHA256 — `internal/update` verifies the downloaded archive against it during
+  `supermetrics version upgrade`, then hands the binary to `minio/selfupdate` for the atomic replace.
 - **Changelog**: Auto-generated from conventional commit messages, grouped by type.
 - **Homebrew tap**: Auto-publish formula to `supermetrics-public/homebrew-tap` repo. GoReleaser's `brews` section
   handles this natively — it pushes a formula file after each release. Requires a `HOMEBREW_TAP_TOKEN` secret (GitHub
   PAT with repo scope on the tap repo).
-- **Docker** (optional, lower priority): Multi-arch image `supermetrics/cli:latest` pushed to GitHub Container Registry.
-  Base image `gcr.io/distroless/static-debian12`. Useful for CI/CD pipelines that prefer containers.
+- **Docker** — *not configured; proposal only.* Would publish a multi-arch `supermetrics/cli:latest` to GitHub
+  Container Registry on `gcr.io/distroless/static-debian12`, for CI/CD pipelines that prefer containers.
 - **Snapshot**: `name_template: "{{ .Tag }}-next"` for pre-release builds.
 
 Before running: `make generate` must have been run (GoReleaser builds from existing source, doesn't run code generation
@@ -27,17 +27,22 @@ itself). The CI workflow handles this sequencing.
 
 ## Release Workflow (`.github/workflows/release.yml`)
 
-**Trigger**: Push of a tag matching `v*` (e.g., `v0.1.0`).
+**Trigger**: Manual `workflow_dispatch` with a required `version` input (e.g. `v0.4.0`). The workflow creates and
+pushes the tag itself — it is not triggered by a tag push.
 
 ```
 Steps:
-  1. Checkout with full history (fetch-depth: 0, needed for changelog)
-  2. Install toolchain via mise (Go, Python, uv, goimports)
-  3. make generate
-  4. make test
-  5. Run GoReleaser (goreleaser/goreleaser-action@v6)
+  1. Validate the version input matches vMAJOR.MINOR.PATCH
+  2. Checkout with full history (fetch-depth: 0, needed for changelog)
+  3. Create and push the tag
+  4. Install toolchain via mise (Go, Python, uv, goimports)
+  5. make generate
+  6. make test
+  7. Run GoReleaser (goreleaser/goreleaser-action, args: release --clean)
      - Uses GITHUB_TOKEN for GitHub Releases
      - Uses HOMEBREW_TAP_TOKEN for Homebrew tap push
+     - Uses SUPERMETRICS_OAUTH_CLIENT_ID / SUPERMETRICS_OAUTH_SCOPES for the ldflags-injected build config
+  8. Notify the linux-packages repo via repository_dispatch
 ```
 
 **Secrets needed**:
@@ -46,6 +51,8 @@ Steps:
   and in 1Password (`GitHub PAT — Homebrew Tap`)
 - `LINUX_PACKAGES_TOKEN` — GitHub PAT with `repo` scope on `supermetrics-public/linux-packages`, stored as a repo
   secret and in 1Password (`GitHub PAT — Linux Packages`)
+- `SUPERMETRICS_OAUTH_CLIENT_ID` and `SUPERMETRICS_OAUTH_SCOPES` — injected into `internal/buildcfg` via `-ldflags`;
+  locally these come from `.env` instead
 
 ## Homebrew Tap Repository (`supermetrics-public/homebrew-tap`)
 
@@ -417,7 +424,7 @@ after creation — 1Password is the recovery path if a secret needs to be rotate
 - [x] Add `LINUX_PACKAGES_TOKEN` secret to `supermetrics-cli` repo (copy PAT from 1Password) — **requires GitHub admin**
 - [x] Add the `repository_dispatch` step to `.github/workflows/release.yml`
 - [x] Delete `private.asc` from local machine (1Password is now the source of truth)
-- [ ] Test: push a tag manually, verify GoReleaser produces `.deb`/`.rpm`, verify `linux-packages` workflow triggers
+- [ ] Test: run release.yml via workflow_dispatch, verify GoReleaser produces `.deb`/`.rpm`, verify `linux-packages` workflow triggers
 - [ ] Test: install `.deb` on Ubuntu via the APT repo, `.rpm` on Fedora via YUM repo
 - [ ] Add install instructions to project README
 
@@ -433,7 +440,7 @@ Steps:
      - Use: gh api repos/supermetrics-public/supermetrics-python-sdk/contents/openapi-spec.yaml
        --jq '.content' | base64 -d > openapi-spec.yaml
      - Or: curl the raw file URL from main branch
-  3. Install tools: goimports
+  3. Install toolchain via mise (Go, Python, uv, goimports)
   4. make generate
   5. Check for diff in openapi-spec.yaml, cmd/generated/
   6. If no diff: exit (no changes needed)
@@ -456,6 +463,9 @@ Requires a `CLI_DISPATCH_TOKEN` secret in the SDK repo (GitHub PAT with `repo` s
 in 1Password as `GitHub PAT — CLI Dispatch` before adding it to the SDK repo's secrets.
 
 ## Auto-Release Workflow (`.github/workflows/auto-release.yml`)
+
+> **Not implemented.** This section is a design proposal — the workflow file does not exist. Releases are cut
+> manually today by running `release.yml` via `workflow_dispatch` with an explicit version.
 
 **Trigger**: Push to `main` that touches any of:
 - `openapi-spec.yaml`
@@ -486,16 +496,16 @@ marker in the commit message can bypass it.
 2. SDK CI sends repository_dispatch to supermetrics-cli
 3. spec-sync.yml fetches new spec, runs make generate, opens PR
 4. PR reviewed/merged (or auto-merged)
-5. auto-release.yml detects generated code changes on main
-6. New tag created (e.g., v0.3.1)
-7. release.yml triggered by tag push
-8. GoReleaser builds binaries for 5 platforms, .deb/.rpm/.apk packages
-9. GitHub Release published with binaries + checksums + packages
-10. Homebrew tap formula auto-updated (via GoReleaser brews section)
-11. release.yml sends repository_dispatch to linux-packages repo
-12. linux-packages rebuilds APT + YUM repo metadata, deploys to GitHub Pages
-13. Users see "new version available" within a week (periodic check)
-14. Users run "supermetrics version upgrade" → binary replaced in-place
+5. A maintainer runs release.yml via workflow_dispatch with the next version (e.g. v0.3.1)
+   (once auto-release.yml exists, steps 5-6 become automatic on generated-code changes)
+6. release.yml validates the version and pushes the tag
+7. GoReleaser builds binaries for 5 platforms, .deb/.rpm/.apk packages
+8. GitHub Release published with binaries + checksums + packages
+9. Homebrew tap formula auto-updated (via GoReleaser brews section)
+10. release.yml sends repository_dispatch to linux-packages repo
+11. linux-packages rebuilds APT + YUM repo metadata, deploys to GitHub Pages
+12. Users see "new version available" within a week (periodic check)
+13. Users run "supermetrics version upgrade" → binary replaced in-place
 ```
 
 ## 1Password Inventory
@@ -518,9 +528,9 @@ next release succeeds. PATs should use the minimum required scope (`repo` on the
 ## Implementation Checklist
 
 - [x] Create `.goreleaser.yaml` with builds, archives, checksum, brews, nfpms sections
-- [x] Create `.github/workflows/release.yml` (tag-triggered, runs GoReleaser)
+- [x] Create `.github/workflows/release.yml` (workflow_dispatch with a version input, tags and runs GoReleaser)
 - [x] Create `.github/workflows/spec-sync.yml` (repository_dispatch handler)
-- [x] Create `.github/workflows/auto-release.yml` (tag bumper on generated code changes)
+- [ ] Create `.github/workflows/auto-release.yml` (tag bumper on generated code changes)
 - [ ] Create `supermetrics-public/homebrew-tap` repo — **requires GitHub admin** (see setup instructions above)
 - [ ] Create `supermetrics-public/linux-packages` repo — **requires GitHub admin** (see setup instructions above)
 - [ ] Generate GPG signing key, store in 1Password (`GPG Signing Key — Linux Packages`)
@@ -529,7 +539,7 @@ next release succeeds. PATs should use the minimum required scope (`repo` on the
   - `LINUX_PACKAGES_TOKEN` in `supermetrics-cli` → 1Password `GitHub PAT — Linux Packages`
   - `CLI_DISPATCH_TOKEN` in SDK repo → 1Password `GitHub PAT — CLI Dispatch`
 - [ ] Add dispatch step to SDK repo's CI workflow — **requires SDK repo access**
-- [ ] Test: push a tag manually, verify GoReleaser produces correct artifacts
+- [ ] Test: run release.yml via workflow_dispatch, verify GoReleaser produces correct artifacts
 - [ ] Test: verify Homebrew tap formula is updated
 - [ ] Test: verify `linux-packages` workflow triggers and APT/YUM repos are published
 - [ ] Test: trigger spec-sync manually via `gh api`, verify PR is created
@@ -547,7 +557,7 @@ next release succeeds. PATs should use the minimum required scope (`repo` on the
 | Parameter renamed/removed (breaking)        | Automatic but silent             | Patch         | Review spec-sync PR diff for user impact                      |
 | Endpoint removed                            | Automatic (skipped with warning) | Patch         | Clean up orphaned mapping entry                               |
 | Server-side bug fix (no spec change)        | No CLI release needed            | —             | None                                                          |
-| CLI bug fix (non-generated code)            | Not auto-released                | Patch         | Push tag manually: `git tag v0.X.Y && git push origin v0.X.Y` |
+| CLI bug fix (non-generated code)            | Not auto-released                | Patch         | Run release.yml via workflow_dispatch with the new version    |
 
 ### Version bumping rules
 
