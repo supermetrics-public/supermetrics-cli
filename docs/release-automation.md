@@ -35,7 +35,7 @@ Steps:
   1. Validate the version input matches vMAJOR.MINOR.PATCH
   2. Checkout with full history (fetch-depth: 0, needed for changelog)
   3. Create and push the tag
-  4. Install toolchain via mise (Go, Python, uv, goimports)
+  4. Install toolchain via mise
   5. make generate
   6. make test
   7. Run GoReleaser (goreleaser/goreleaser-action, args: release --clean)
@@ -440,7 +440,7 @@ Steps:
      - Use: gh api repos/supermetrics-public/supermetrics-python-sdk/contents/openapi-spec.yaml
        --jq '.content' | base64 -d > openapi-spec.yaml
      - Or: curl the raw file URL from main branch
-  3. Install toolchain via mise (Go, Python, uv, goimports)
+  3. Install toolchain via mise
   4. make generate
   5. Check for diff in openapi-spec.yaml, cmd/generated/
   6. If no diff: exit (no changes needed)

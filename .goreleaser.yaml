@@ -32,6 +32,7 @@ archives:
         format: zip
     files:
       - README.md
+      - LICENSE
 
 checksum:
   name_template: checksums.txt
@@ -53,6 +54,7 @@ brews:
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     homepage: https://github.com/supermetrics-public/supermetrics-cli
     description: Command-line interface for the Supermetrics API
+    license: Apache-2.0
     install: |
       bin.install "supermetrics"
     test: |
@@ -64,7 +66,7 @@ nfpms:
     vendor: Supermetrics
     homepage: https://github.com/supermetrics-public/supermetrics-cli
     description: Command-line interface for the Supermetrics API
-    license: MIT
+    license: Apache-2.0
     formats:
       - deb
       - rpm
