@@ -33,7 +33,7 @@ var ConnectorBuilderLogoGetCmd = &cobra.Command{
 			return exitcode.Wrap(fmt.Errorf("--connector-identifier must not be empty"), exitcode.Usage)
 		}
 
-		requestURL := strings.Replace(strings.Replace("https://api."+domain+"/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/logo", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderLogoGetTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderLogoGetConnectorIdentifier), 1)
+		requestURL := strings.Replace(strings.Replace("https://dts-api."+domain+"/v1/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/logo", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderLogoGetTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderLogoGetConnectorIdentifier), 1)
 
 		timeout := resolveTimeout(cmd, httpclient.DefaultTimeout)
 		result, err := executeRequest(cmd, "GET", requestURL, nil, apiKey, timeout, "Fetching logo...")
@@ -61,7 +61,7 @@ var ConnectorBuilderLogoUploadCmd = &cobra.Command{
 			return exitcode.Wrap(fmt.Errorf("--connector-identifier must not be empty"), exitcode.Usage)
 		}
 
-		requestURL := strings.Replace(strings.Replace("https://api."+domain+"/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/logo", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderLogoUploadTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderLogoUploadConnectorIdentifier), 1)
+		requestURL := strings.Replace(strings.Replace("https://dts-api."+domain+"/v1/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/logo", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderLogoUploadTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderLogoUploadConnectorIdentifier), 1)
 
 		filePath, cleanup, err := resolveFileInput(flagConnectorBuilderLogoUploadFile)
 		if err != nil {
@@ -86,14 +86,14 @@ var ConnectorBuilderLogoUploadCmd = &cobra.Command{
 }
 
 func init() {
-	ConnectorBuilderLogoGetCmd.Flags().Int64Var(&flagConnectorBuilderLogoGetTeamId, "team-id", 0, "Unique identifier of the team")
+	ConnectorBuilderLogoGetCmd.Flags().Int64Var(&flagConnectorBuilderLogoGetTeamId, "team-id", 0, "ID of the team")
 	ConnectorBuilderLogoGetCmd.Flags().StringVar(&flagConnectorBuilderLogoGetConnectorIdentifier, "connector-identifier", "", "Unique identifier of the connector")
 	_ = ConnectorBuilderLogoGetCmd.MarkFlagRequired("team-id")
 	_ = ConnectorBuilderLogoGetCmd.MarkFlagRequired("connector-identifier")
 	ConnectorBuilderLogoCmd.AddCommand(ConnectorBuilderLogoGetCmd)
 
 	ConnectorBuilderLogoUploadCmd.Flags().StringVar(&flagConnectorBuilderLogoUploadFile, "file", "", "Path to file (reads from stdin if not provided)")
-	ConnectorBuilderLogoUploadCmd.Flags().Int64Var(&flagConnectorBuilderLogoUploadTeamId, "team-id", 0, "Unique identifier of the team")
+	ConnectorBuilderLogoUploadCmd.Flags().Int64Var(&flagConnectorBuilderLogoUploadTeamId, "team-id", 0, "ID of the team")
 	ConnectorBuilderLogoUploadCmd.Flags().StringVar(&flagConnectorBuilderLogoUploadConnectorIdentifier, "connector-identifier", "", "Unique identifier of the connector")
 	_ = ConnectorBuilderLogoUploadCmd.MarkFlagRequired("team-id")
 	_ = ConnectorBuilderLogoUploadCmd.MarkFlagRequired("connector-identifier")
