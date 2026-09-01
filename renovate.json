@@ -2,5 +2,43 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Go directive in go.mod. The built-in gomod manager extracts it but never proposes an update. The leading \\n anchors the line: Renovate does not set the m flag, so ^ and $ would bind to the whole file, and RE2 (used when the re2 module is present) rejects lookarounds.",
+      "managerFilePatterns": ["/^go\\.mod$/"],
+      "matchStrings": ["\\ngo (?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "go",
+      "packageNameTemplate": "golang/go",
+      "datasourceTemplate": "github-tags",
+      "extractVersionTemplate": "^go(?<version>\\S+)"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Tool pins change what CI enforces; a new lint release can red every subsequent PR, so review rather than automerge",
+      "matchManagers": ["mise"],
+      "matchDepNames": [
+        "golangci-lint",
+        "gotestsum",
+        "ruff",
+        "uv",
+        "go:golang.org/x/tools/cmd/goimports",
+        "go:golang.org/x/vuln/cmd/govulncheck"
+      ],
+      "groupName": "dev tools",
+      "semanticCommitType": "build",
+      "automerge": false,
+      "addLabels": ["tooling"]
+    },
+    {
+      "description": "Move both Go version pins — mise.toml and go.mod — in a single PR so they cannot drift apart",
+      "matchDepNames": ["go"],
+      "groupName": "go toolchain",
+      "semanticCommitType": "build",
+      "automerge": false,
+      "addLabels": ["go-toolchain"]
+    }
   ]
 }

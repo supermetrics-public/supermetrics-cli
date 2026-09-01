@@ -480,15 +480,16 @@ https://github.com/supermetrics-public/supermetrics-cli/issues
 
 ### Prerequisites
 
-- Go 1.26+
-- Python 3.13+ (for command generation, pinned in `.python-version`)
-- [uv](https://docs.astral.sh/uv/) (Python package manager, used for running generator and linter)
+- [mise](https://mise.jdx.dev/) — provides Go, Python, uv and every dev tool
 
-Install all required tools (Go tools, golangci-lint, ruff) with:
+Install the pinned toolchain (Go, Python, uv, ruff, golangci-lint, goimports, govulncheck, gotestsum) with:
 
 ```bash
 make tools
 ```
+
+Versions come from `mise.toml` (`.python-version` for Python), with exact builds and checksums locked in
+`mise.lock`.
 
 ### Environment setup
 
@@ -514,10 +515,12 @@ make vet            # Run go vet static analysis
 make lint           # Run golangci-lint + ruff (Python scripts)
 make lint-python    # Run ruff only (Python scripts)
 make lint-fix       # Auto-fix lint and formatting issues (Go + Python)
+make modernize      # Apply go fix modernizers
+make modernize-check # Report available modernizations, non-zero if any
 make vulncheck      # Scan for known vulnerabilities
 make tidy-check     # Verify go.mod and go.sum are tidy
 make generate       # Regenerate code from OpenAPI spec
-make tools          # Install all required tools (Go tools, golangci-lint, ruff)
+make tools          # Install the pinned toolchain (mise install)
 make snapshot       # Test GoReleaser build locally (no publish)
 make clean          # Remove bin/ and coverage.out
 ```
@@ -569,7 +572,8 @@ supermetrics-cli/
 ├── .env.example                   Development environment variables (copy to .env)
 ├── .goreleaser.yaml               Cross-platform release configuration
 ├── .golangci.yml                  Go linting configuration
-├── .golangci-lint-version         Pinned golangci-lint version
+├── mise.toml                      Pinned Go toolchain and dev tools
+├── mise.lock                      Resolved tool builds with checksums
 ├── .covignore                     Packages excluded from coverage reports
 └── Makefile                       Build, test, lint, generate targets
 ```

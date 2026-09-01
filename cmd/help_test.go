@@ -63,6 +63,6 @@ func TestColorizeHelp_PlainTextUnchanged(t *testing.T) {
 	output := colorizeHelp(input)
 
 	// Description line should have no color codes
-	descLine := strings.Split(output, "\n")[0]
+	descLine, _, _ := strings.Cut(output, "\n")
 	assert.NotContains(t, descLine, "\033[", "plain description should not contain ANSI codes")
 }

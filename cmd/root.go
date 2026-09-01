@@ -119,8 +119,7 @@ func init() {
 // Execute runs the root command.
 func Execute() error {
 	if err := rootCmd.Execute(); err != nil {
-		var apiErr *httpclient.APIError
-		if errors.As(err, &apiErr) {
+		if apiErr, ok := errors.AsType[*httpclient.APIError](err); ok {
 			useColor := !flagNoColor && isStderrTerminal()
 			if _, ok := os.LookupEnv("NO_COLOR"); ok {
 				useColor = false
@@ -142,13 +141,11 @@ func Execute() error {
 // classifyError maps an error to a BSD sysexits-compatible exit code.
 func classifyError(err error) int {
 	// Already classified (e.g. from generated validation)
-	var exitErr *exitcode.Error
-	if errors.As(err, &exitErr) {
+	if exitErr, ok := errors.AsType[*exitcode.Error](err); ok {
 		return exitErr.Code
 	}
 	// API errors — classify by HTTP status
-	var apiErr *httpclient.APIError
-	if errors.As(err, &apiErr) {
+	if apiErr, ok := errors.AsType[*httpclient.APIError](err); ok {
 		switch {
 		case apiErr.StatusCode == 401 || apiErr.StatusCode == 403:
 			return exitcode.Auth
