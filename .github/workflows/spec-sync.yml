@@ -49,7 +49,12 @@ jobs:
       - name: Create PR
         if: steps.diff.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # @automation PAT, not GITHUB_TOKEN: opening a PR from within the repo with
+          # GITHUB_TOKEN is blocked unless "Allow GitHub Actions to create and approve
+          # pull requests" is enabled — which we deliberately leave off on this public
+          # repo. A PAT-opened PR also triggers the PR's CI (GITHUB_TOKEN-opened PRs
+          # do not).
+          GH_TOKEN: ${{ secrets.AUTOMATION_TOKEN }}
         run: |
           BRANCH="auto/spec-update-$(date +%Y%m%d-%H%M%S)"
           git config user.name "github-actions[bot]"
