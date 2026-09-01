@@ -17,7 +17,7 @@ var DatasourceCmd = &cobra.Command{
 	Short: "View data source configuration details",
 }
 
-var flagDatasourceGetTeamId int
+var flagDatasourceGetTeamId int64
 var flagDatasourceGetDataSourceId string
 var flagDatasourceGetSmAppId string
 
@@ -47,8 +47,8 @@ var DatasourceGetCmd = &cobra.Command{
 
 func init() {
 	DatasourceGetCmd.Flags().StringVar(&flagDatasourceGetSmAppId, "sm-app-id", "", "Application identifier")
-	DatasourceGetCmd.Flags().IntVar(&flagDatasourceGetTeamId, "team-id", 0, "Team ID")
-	DatasourceGetCmd.Flags().StringVar(&flagDatasourceGetDataSourceId, "data-source-id", "", "Data source identifier")
+	DatasourceGetCmd.Flags().Int64Var(&flagDatasourceGetTeamId, "team-id", 0, "ID of the team")
+	DatasourceGetCmd.Flags().StringVar(&flagDatasourceGetDataSourceId, "data-source-id", "", "Data source identifier (e.g., \"GAWA\", \"AW\", \"SA360\")")
 	_ = DatasourceGetCmd.MarkFlagRequired("team-id")
 	_ = DatasourceGetCmd.MarkFlagRequired("data-source-id")
 	DatasourceCmd.AddCommand(DatasourceGetCmd)

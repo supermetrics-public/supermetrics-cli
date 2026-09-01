@@ -32,7 +32,7 @@ var ConnectorBuilderListCmd = &cobra.Command{
 			return err
 		}
 
-		requestURL := strings.Replace("https://api."+domain+"/v1/teams/{team_id}/connector_builder/connectors", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderListTeamId), 1)
+		requestURL := strings.Replace("https://dts-api."+domain+"/v1/v1/teams/{team_id}/connector_builder/connectors", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderListTeamId), 1)
 
 		q := url.Values{}
 		if flagConnectorBuilderListIncludeConfigs {
@@ -67,7 +67,7 @@ var ConnectorBuilderGetCmd = &cobra.Command{
 			return exitcode.Wrap(fmt.Errorf("--connector-identifier must not be empty"), exitcode.Usage)
 		}
 
-		requestURL := strings.Replace(strings.Replace("https://api."+domain+"/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderGetTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderGetConnectorIdentifier), 1)
+		requestURL := strings.Replace(strings.Replace("https://dts-api."+domain+"/v1/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderGetTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderGetConnectorIdentifier), 1)
 
 		timeout := resolveTimeout(cmd, httpclient.DefaultTimeout)
 		result, err := executeRequest(cmd, "GET", requestURL, nil, apiKey, timeout, "Fetching connector...")
@@ -79,9 +79,6 @@ var ConnectorBuilderGetCmd = &cobra.Command{
 }
 
 var flagConnectorBuilderCreateTeamId int64
-var flagConnectorBuilderCreateTitle string
-var flagConnectorBuilderCreateDescription string
-var flagConnectorBuilderCreateConnectorIdentifier string
 
 var ConnectorBuilderCreateCmd = &cobra.Command{
 	Use:   "create",
@@ -92,29 +89,15 @@ var ConnectorBuilderCreateCmd = &cobra.Command{
 			return err
 		}
 
-		if flagConnectorBuilderCreateTitle == "" {
-			return exitcode.Wrap(fmt.Errorf("--title must not be empty"), exitcode.Usage)
-		}
-
-		requestURL := strings.Replace("https://api."+domain+"/v1/teams/{team_id}/connector_builder/connectors", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderCreateTeamId), 1)
-
-		body := map[string]any{
-			"title":                flagConnectorBuilderCreateTitle,
-			"description":          flagConnectorBuilderCreateDescription,
-			"connector_identifier": flagConnectorBuilderCreateConnectorIdentifier,
-		}
-		bodyJSON, err := json.Marshal(body)
-		if err != nil {
-			return fmt.Errorf("failed to encode request body: %w", err)
-		}
+		requestURL := strings.Replace("https://dts-api."+domain+"/v1/v1/teams/{team_id}/connector_builder/connectors", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderCreateTeamId), 1)
 
 		if dryRun, _ := cmd.Flags().GetBool("dry-run"); dryRun {
-			dryRunRequest(cmd, "POST", requestURL, strings.NewReader(string(bodyJSON)))
+			dryRunRequest(cmd, "POST", requestURL, nil)
 			return nil
 		}
 
 		timeout := resolveTimeout(cmd, httpclient.DefaultTimeout)
-		result, err := executeRequest(cmd, "POST", requestURL, strings.NewReader(string(bodyJSON)), apiKey, timeout, "Creating connector...")
+		result, err := executeRequest(cmd, "POST", requestURL, nil, apiKey, timeout, "Creating connector...")
 		if err != nil {
 			return err
 		}
@@ -156,14 +139,8 @@ var ConnectorBuilderUpdateCmd = &cobra.Command{
 		if flagConnectorBuilderUpdateConnectorIdentifier == "" {
 			return exitcode.Wrap(fmt.Errorf("--connector-identifier must not be empty"), exitcode.Usage)
 		}
-		if flagConnectorBuilderUpdateConnector == "" {
-			return exitcode.Wrap(fmt.Errorf("--connector must not be empty"), exitcode.Usage)
-		}
-		if flagConnectorBuilderUpdateConfiguration == "" {
-			return exitcode.Wrap(fmt.Errorf("--configuration must not be empty"), exitcode.Usage)
-		}
 
-		requestURL := strings.Replace(strings.Replace("https://api."+domain+"/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderUpdateTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderUpdateConnectorIdentifier), 1)
+		requestURL := strings.Replace(strings.Replace("https://dts-api."+domain+"/v1/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderUpdateTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderUpdateConnectorIdentifier), 1)
 
 		body := map[string]any{}
 		var flagConnectorBuilderUpdateConnectorParsed map[string]any
@@ -211,7 +188,7 @@ var ConnectorBuilderDeleteCmd = &cobra.Command{
 			return exitcode.Wrap(fmt.Errorf("--connector-identifier must not be empty"), exitcode.Usage)
 		}
 
-		requestURL := strings.Replace(strings.Replace("https://api."+domain+"/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderDeleteTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderDeleteConnectorIdentifier), 1)
+		requestURL := strings.Replace(strings.Replace("https://dts-api."+domain+"/v1/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderDeleteTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderDeleteConnectorIdentifier), 1)
 
 		if err := confirmAction(cmd, strings.Replace("Delete connector {connector_identifier}?", "{connector_identifier}", flagConnectorBuilderDeleteConnectorIdentifier, 1)); err != nil {
 			return err
@@ -227,38 +204,34 @@ var ConnectorBuilderDeleteCmd = &cobra.Command{
 }
 
 func init() {
-	ConnectorBuilderListCmd.Flags().BoolVar(&flagConnectorBuilderListIncludeConfigs, "include-configs", false, "Include connector configurations in the response")
-	ConnectorBuilderListCmd.Flags().Int64Var(&flagConnectorBuilderListTeamId, "team-id", 0, "Unique identifier of the team")
+	ConnectorBuilderListCmd.Flags().BoolVar(&flagConnectorBuilderListIncludeConfigs, "include-configs", false, "Whether to include connector configurations in the response. Defaults to false.")
+	ConnectorBuilderListCmd.Flags().Int64Var(&flagConnectorBuilderListTeamId, "team-id", 0, "ID of the team")
 	_ = ConnectorBuilderListCmd.MarkFlagRequired("team-id")
 	ConnectorBuilderCmd.AddCommand(ConnectorBuilderListCmd)
 
-	ConnectorBuilderGetCmd.Flags().Int64Var(&flagConnectorBuilderGetTeamId, "team-id", 0, "Unique identifier of the team")
+	ConnectorBuilderGetCmd.Flags().Int64Var(&flagConnectorBuilderGetTeamId, "team-id", 0, "ID of the team")
 	ConnectorBuilderGetCmd.Flags().StringVar(&flagConnectorBuilderGetConnectorIdentifier, "connector-identifier", "", "Unique identifier of the connector")
 	_ = ConnectorBuilderGetCmd.MarkFlagRequired("team-id")
 	_ = ConnectorBuilderGetCmd.MarkFlagRequired("connector-identifier")
 	ConnectorBuilderCmd.AddCommand(ConnectorBuilderGetCmd)
 
-	ConnectorBuilderCreateCmd.Flags().StringVar(&flagConnectorBuilderCreateTitle, "title", "", "Name of the connector")
-	ConnectorBuilderCreateCmd.Flags().StringVar(&flagConnectorBuilderCreateDescription, "description", "", "Description of the connector")
-	ConnectorBuilderCreateCmd.Flags().StringVar(&flagConnectorBuilderCreateConnectorIdentifier, "connector-identifier", "", "Identifier of an existing connector to duplicate from")
-	ConnectorBuilderCreateCmd.Flags().Int64Var(&flagConnectorBuilderCreateTeamId, "team-id", 0, "Unique identifier of the team")
+	ConnectorBuilderCreateCmd.Flags().Int64Var(&flagConnectorBuilderCreateTeamId, "team-id", 0, "ID of the team")
 	ConnectorBuilderCreateCmd.Flags().Bool("dry-run", false, "Print request details without executing")
 	_ = ConnectorBuilderCreateCmd.MarkFlagRequired("team-id")
-	_ = ConnectorBuilderCreateCmd.MarkFlagRequired("title")
 	ConnectorBuilderCmd.AddCommand(ConnectorBuilderCreateCmd)
 
-	ConnectorBuilderUpdateCmd.Flags().StringVar(&flagConnectorBuilderUpdateConnector, "connector", "", "Connector metadata as JSON object with name and description")
+	ConnectorBuilderUpdateCmd.Flags().StringVar(&flagConnectorBuilderUpdateConnector, "connector", "", "Connector metadata to update")
 	ConnectorBuilderUpdateCmd.Flags().StringVar(&flagConnectorBuilderUpdateConnectorFile, "connector-file", "", "Path to JSON file for --connector")
-	ConnectorBuilderUpdateCmd.Flags().StringVar(&flagConnectorBuilderUpdateConfiguration, "configuration", "", "Connector configuration as JSON object with id, version, and configuration_json")
+	ConnectorBuilderUpdateCmd.Flags().StringVar(&flagConnectorBuilderUpdateConfiguration, "configuration", "", "Connector configuration to update")
 	ConnectorBuilderUpdateCmd.Flags().StringVar(&flagConnectorBuilderUpdateConfigurationFile, "configuration-file", "", "Path to JSON file for --configuration")
-	ConnectorBuilderUpdateCmd.Flags().Int64Var(&flagConnectorBuilderUpdateTeamId, "team-id", 0, "Unique identifier of the team")
+	ConnectorBuilderUpdateCmd.Flags().Int64Var(&flagConnectorBuilderUpdateTeamId, "team-id", 0, "ID of the team")
 	ConnectorBuilderUpdateCmd.Flags().StringVar(&flagConnectorBuilderUpdateConnectorIdentifier, "connector-identifier", "", "Unique identifier of the connector")
 	ConnectorBuilderUpdateCmd.Flags().Bool("dry-run", false, "Print request details without executing")
 	_ = ConnectorBuilderUpdateCmd.MarkFlagRequired("team-id")
 	_ = ConnectorBuilderUpdateCmd.MarkFlagRequired("connector-identifier")
 	ConnectorBuilderCmd.AddCommand(ConnectorBuilderUpdateCmd)
 
-	ConnectorBuilderDeleteCmd.Flags().Int64Var(&flagConnectorBuilderDeleteTeamId, "team-id", 0, "Unique identifier of the team")
+	ConnectorBuilderDeleteCmd.Flags().Int64Var(&flagConnectorBuilderDeleteTeamId, "team-id", 0, "ID of the team")
 	ConnectorBuilderDeleteCmd.Flags().StringVar(&flagConnectorBuilderDeleteConnectorIdentifier, "connector-identifier", "", "Unique identifier of the connector")
 	ConnectorBuilderDeleteCmd.Flags().BoolP("yes", "y", false, "Skip confirmation prompt")
 	_ = ConnectorBuilderDeleteCmd.MarkFlagRequired("team-id")
