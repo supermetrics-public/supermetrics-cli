@@ -132,10 +132,7 @@ func retryDelay(resp *http.Response, attempt int, cfg RetryConfig) time.Duration
 
 // backoff calculates delay with full jitter: random in [0, min(base*2^attempt, max)].
 func backoff(attempt int, base, max time.Duration) time.Duration {
-	delay := time.Duration(float64(base) * math.Pow(2, float64(attempt)))
-	if delay > max {
-		delay = max
-	}
+	delay := min(time.Duration(float64(base)*math.Pow(2, float64(attempt))), max)
 	return time.Duration(rand.Int64N(int64(delay) + 1)) //nolint:gosec // jitter doesn't need crypto randomness
 }
 

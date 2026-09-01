@@ -9,7 +9,7 @@ dependencies. Commands are auto-generated from an OpenAPI spec.
 
 ```bash
 cp .env.example .env  # One-time: set up development environment variables
-make tools            # One-time: install goimports, govulncheck, gotestsum, golangci-lint, ruff
+make tools            # One-time: install the pinned toolchain (mise install)
 make build            # Build to bin/supermetrics
 make run ARGS="queries execute --help"  # Quick run without building
 ```
@@ -25,8 +25,13 @@ make vet            # Static analysis
 make lint           # golangci-lint + ruff (Python scripts)
 make lint-python    # Ruff only (Python scripts)
 make lint-fix       # Auto-fix lint and formatting issues (Go + Python)
+make modernize      # Apply go fix modernizers
+make modernize-check # Report available modernizations, non-zero if any
 make vulncheck      # Known vulnerability scan
 ```
+
+`modernize-check` is deliberately not a CI gate — a future Go release adding a modernizer would otherwise fail
+unrelated PRs.
 
 ## Code generation
 
@@ -124,6 +129,14 @@ The generator (`scripts/generate_commands.py`) produces Cobra commands that use 
   `infoWriterErr()` return `io.Discard` in quiet mode — errors and results still printed normally
 - Builds use `CGO_ENABLED=0` and `-trimpath` for static, reproducible binaries. The Makefile reads `.env` and injects
   values via `-ldflags` into `internal/buildcfg`
+- Toolchain is pinned in `mise.toml` (`.python-version` for Python) and locked with checksums in `mise.lock`.
+  `make tools` is `mise install`; CI installs the same set via `jdx/mise-action`. Makefile targets call tools
+  through `mise exec --` so they work without shell activation — `go` is left bare because `GOTOOLCHAIN=auto`
+  plus the `go` directive already pin it
+- The Go version is pinned in two places: `mise.toml` (what gets installed) and the `go` directive in `go.mod`
+  (the floor `make vulncheck` gates on). mise cannot read `go.mod`, so this is a real duplication; Renovate groups
+  both into one `go toolchain` PR. The `mise.toml` entry is what drives updates — Renovate's gomod manager
+  never proposes one for the `go` directive, so a custom regex manager in `renovate.json` covers it
 - Body parameters with `type: object` in the OpenAPI spec accept JSON strings via flags (e.g.,
   `--connector '{"name":"..."}'`). Companion `--{flag}-file` flags read JSON from files. The generator emits
   `json.Unmarshal` to parse string values into maps for nested request bodies

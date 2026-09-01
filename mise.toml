@@ -1,0 +1,16 @@
+[settings]
+lockfile = true
+# Lets mise read .python-version, keeping the Python pin in one file.
+idiomatic_version_file_enable_tools = ["python"]
+
+[tools]
+# Keep in sync with the `go` directive in go.mod; Renovate groups both into one
+# PR. This entry drives the updates — the gomod manager proposes none.
+go = "1.27.0"
+
+golangci-lint = "2.13.2"
+gotestsum = "1.13.0"
+uv = "0.12.7"
+ruff = "0.16.5"
+"go:golang.org/x/tools/cmd/goimports" = "0.49.0"
+"go:golang.org/x/vuln/cmd/govulncheck" = "1.7.0"

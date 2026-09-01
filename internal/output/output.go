@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"sort"
 	"strings"
 )
@@ -289,9 +290,7 @@ func flattenNestedObjects(item map[string]any, prefix string) map[string]any {
 			key = prefix + "." + k
 		}
 		if m, ok := v.(map[string]any); ok {
-			for fk, fv := range flattenNestedObjects(m, key) {
-				result[fk] = fv
-			}
+			maps.Copy(result, flattenNestedObjects(m, key))
 		} else {
 			result[key] = v
 		}
@@ -357,9 +356,7 @@ func expandArrayField(items []map[string]any, field string) []map[string]any {
 			// Merge child fields with prefix
 			if m, ok := elem.(map[string]any); ok {
 				flat := flattenNestedObjects(m, field)
-				for k, v := range flat {
-					row[k] = v
-				}
+				maps.Copy(row, flat)
 			}
 			result = append(result, row)
 		}
