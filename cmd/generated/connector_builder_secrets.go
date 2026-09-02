@@ -35,7 +35,7 @@ var ConnectorBuilderSecretsListCmd = &cobra.Command{
 			return exitcode.Wrap(fmt.Errorf("--connector-identifier must not be empty"), exitcode.Usage)
 		}
 
-		requestURL := strings.Replace(strings.Replace("https://api."+domain+"/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/secrets", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderSecretsListTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderSecretsListConnectorIdentifier), 1)
+		requestURL := strings.Replace(strings.Replace("https://dts-api."+domain+"/v1/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/secrets", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderSecretsListTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderSecretsListConnectorIdentifier), 1)
 
 		timeout := resolveTimeout(cmd, httpclient.DefaultTimeout)
 		result, err := executeRequest(cmd, "GET", requestURL, nil, apiKey, timeout, "Fetching secrets...")
@@ -78,7 +78,7 @@ var ConnectorBuilderSecretsCreateCmd = &cobra.Command{
 			flagConnectorBuilderSecretsCreateSecretValue = val
 		}
 
-		requestURL := strings.Replace(strings.Replace("https://api."+domain+"/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/secrets", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderSecretsCreateTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderSecretsCreateConnectorIdentifier), 1)
+		requestURL := strings.Replace(strings.Replace("https://dts-api."+domain+"/v1/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/secrets", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderSecretsCreateTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderSecretsCreateConnectorIdentifier), 1)
 
 		body := map[string]any{
 			"secret_name":  flagConnectorBuilderSecretsCreateSecretName,
@@ -130,7 +130,7 @@ var ConnectorBuilderSecretsUpdateCmd = &cobra.Command{
 			flagConnectorBuilderSecretsUpdateSecretValue = val
 		}
 
-		requestURL := strings.Replace(strings.Replace(strings.Replace("https://api."+domain+"/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/secrets/{secret_placeholder}", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderSecretsUpdateTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderSecretsUpdateConnectorIdentifier), 1), "{secret_placeholder}", url.PathEscape(flagConnectorBuilderSecretsUpdateSecretPlaceholder), 1)
+		requestURL := strings.Replace(strings.Replace(strings.Replace("https://dts-api."+domain+"/v1/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/secrets/{secret_placeholder}", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderSecretsUpdateTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderSecretsUpdateConnectorIdentifier), 1), "{secret_placeholder}", url.PathEscape(flagConnectorBuilderSecretsUpdateSecretPlaceholder), 1)
 
 		body := map[string]any{
 			"secret_value": flagConnectorBuilderSecretsUpdateSecretValue,
@@ -169,7 +169,7 @@ var ConnectorBuilderSecretsDeleteCmd = &cobra.Command{
 			return exitcode.Wrap(fmt.Errorf("--secret-placeholder must not be empty"), exitcode.Usage)
 		}
 
-		requestURL := strings.Replace(strings.Replace(strings.Replace("https://api."+domain+"/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/secrets/{secret_placeholder}", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderSecretsDeleteTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderSecretsDeleteConnectorIdentifier), 1), "{secret_placeholder}", url.PathEscape(flagConnectorBuilderSecretsDeleteSecretPlaceholder), 1)
+		requestURL := strings.Replace(strings.Replace(strings.Replace("https://dts-api."+domain+"/v1/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/secrets/{secret_placeholder}", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderSecretsDeleteTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderSecretsDeleteConnectorIdentifier), 1), "{secret_placeholder}", url.PathEscape(flagConnectorBuilderSecretsDeleteSecretPlaceholder), 1)
 
 		if err := confirmAction(cmd, strings.Replace("Delete secret {secret_placeholder}?", "{secret_placeholder}", flagConnectorBuilderSecretsDeleteSecretPlaceholder, 1)); err != nil {
 			return err
@@ -185,33 +185,33 @@ var ConnectorBuilderSecretsDeleteCmd = &cobra.Command{
 }
 
 func init() {
-	ConnectorBuilderSecretsListCmd.Flags().Int64Var(&flagConnectorBuilderSecretsListTeamId, "team-id", 0, "Unique identifier of the team")
+	ConnectorBuilderSecretsListCmd.Flags().Int64Var(&flagConnectorBuilderSecretsListTeamId, "team-id", 0, "ID of the team")
 	ConnectorBuilderSecretsListCmd.Flags().StringVar(&flagConnectorBuilderSecretsListConnectorIdentifier, "connector-identifier", "", "Unique identifier of the connector")
 	_ = ConnectorBuilderSecretsListCmd.MarkFlagRequired("team-id")
 	_ = ConnectorBuilderSecretsListCmd.MarkFlagRequired("connector-identifier")
 	ConnectorBuilderSecretsCmd.AddCommand(ConnectorBuilderSecretsListCmd)
 
 	ConnectorBuilderSecretsCreateCmd.Flags().StringVar(&flagConnectorBuilderSecretsCreateSecretName, "secret-name", "", "Human-readable name for the secret")
-	ConnectorBuilderSecretsCreateCmd.Flags().StringVar(&flagConnectorBuilderSecretsCreateSecretValue, "secret-value", "", "Plaintext secret value (encrypted at rest) (leave empty for secure prompt)")
-	ConnectorBuilderSecretsCreateCmd.Flags().Int64Var(&flagConnectorBuilderSecretsCreateTeamId, "team-id", 0, "Unique identifier of the team")
+	ConnectorBuilderSecretsCreateCmd.Flags().StringVar(&flagConnectorBuilderSecretsCreateSecretValue, "secret-value", "", "Plaintext value to be encrypted and stored (leave empty for secure prompt)")
+	ConnectorBuilderSecretsCreateCmd.Flags().Int64Var(&flagConnectorBuilderSecretsCreateTeamId, "team-id", 0, "ID of the team")
 	ConnectorBuilderSecretsCreateCmd.Flags().StringVar(&flagConnectorBuilderSecretsCreateConnectorIdentifier, "connector-identifier", "", "Unique identifier of the connector")
 	_ = ConnectorBuilderSecretsCreateCmd.MarkFlagRequired("team-id")
 	_ = ConnectorBuilderSecretsCreateCmd.MarkFlagRequired("connector-identifier")
 	_ = ConnectorBuilderSecretsCreateCmd.MarkFlagRequired("secret-name")
 	ConnectorBuilderSecretsCmd.AddCommand(ConnectorBuilderSecretsCreateCmd)
 
-	ConnectorBuilderSecretsUpdateCmd.Flags().StringVar(&flagConnectorBuilderSecretsUpdateSecretValue, "secret-value", "", "New plaintext secret value (encrypted at rest) (leave empty for secure prompt)")
-	ConnectorBuilderSecretsUpdateCmd.Flags().Int64Var(&flagConnectorBuilderSecretsUpdateTeamId, "team-id", 0, "Unique identifier of the team")
+	ConnectorBuilderSecretsUpdateCmd.Flags().StringVar(&flagConnectorBuilderSecretsUpdateSecretValue, "secret-value", "", "New plaintext value to overwrite the existing one (leave empty for secure prompt)")
+	ConnectorBuilderSecretsUpdateCmd.Flags().Int64Var(&flagConnectorBuilderSecretsUpdateTeamId, "team-id", 0, "ID of the team")
 	ConnectorBuilderSecretsUpdateCmd.Flags().StringVar(&flagConnectorBuilderSecretsUpdateConnectorIdentifier, "connector-identifier", "", "Unique identifier of the connector")
-	ConnectorBuilderSecretsUpdateCmd.Flags().StringVar(&flagConnectorBuilderSecretsUpdateSecretPlaceholder, "secret-placeholder", "", "Placeholder identifier of the secret")
+	ConnectorBuilderSecretsUpdateCmd.Flags().StringVar(&flagConnectorBuilderSecretsUpdateSecretPlaceholder, "secret-placeholder", "", "Unique identifier of the secret")
 	_ = ConnectorBuilderSecretsUpdateCmd.MarkFlagRequired("team-id")
 	_ = ConnectorBuilderSecretsUpdateCmd.MarkFlagRequired("connector-identifier")
 	_ = ConnectorBuilderSecretsUpdateCmd.MarkFlagRequired("secret-placeholder")
 	ConnectorBuilderSecretsCmd.AddCommand(ConnectorBuilderSecretsUpdateCmd)
 
-	ConnectorBuilderSecretsDeleteCmd.Flags().Int64Var(&flagConnectorBuilderSecretsDeleteTeamId, "team-id", 0, "Unique identifier of the team")
+	ConnectorBuilderSecretsDeleteCmd.Flags().Int64Var(&flagConnectorBuilderSecretsDeleteTeamId, "team-id", 0, "ID of the team")
 	ConnectorBuilderSecretsDeleteCmd.Flags().StringVar(&flagConnectorBuilderSecretsDeleteConnectorIdentifier, "connector-identifier", "", "Unique identifier of the connector")
-	ConnectorBuilderSecretsDeleteCmd.Flags().StringVar(&flagConnectorBuilderSecretsDeleteSecretPlaceholder, "secret-placeholder", "", "Placeholder identifier of the secret")
+	ConnectorBuilderSecretsDeleteCmd.Flags().StringVar(&flagConnectorBuilderSecretsDeleteSecretPlaceholder, "secret-placeholder", "", "Unique identifier of the secret")
 	ConnectorBuilderSecretsDeleteCmd.Flags().BoolP("yes", "y", false, "Skip confirmation prompt")
 	_ = ConnectorBuilderSecretsDeleteCmd.MarkFlagRequired("team-id")
 	_ = ConnectorBuilderSecretsDeleteCmd.MarkFlagRequired("connector-identifier")
