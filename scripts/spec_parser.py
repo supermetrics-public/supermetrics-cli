@@ -111,6 +111,28 @@ def extract_params(spec, operation):
         }
         params.append(p)
 
+    # Form-urlencoded body parameters (application/x-www-form-urlencoded)
+    form_content = body_content.get("application/x-www-form-urlencoded", {})
+    form_schema = form_content.get("schema", {})
+    if "$ref" in form_schema:
+        form_schema = resolve_ref(spec, form_schema["$ref"])
+
+    for prop_name, prop_schema in form_schema.get("properties", {}).items():
+        if "$ref" in prop_schema:
+            prop_schema = resolve_ref(spec, prop_schema["$ref"])  # noqa: PLW2901
+
+        required_list = form_schema.get("required", [])
+        p = {
+            "name": prop_name,
+            "cli_flag": snake_to_kebab(prop_name),
+            "in": "form_urlencoded",
+            "required": prop_name in required_list,
+            "description": prop_schema.get("description", ""),
+            "type": prop_schema.get("type", "string"),
+            "format": prop_schema.get("format", ""),
+        }
+        params.append(p)
+
     # For GET endpoints with json query param, extract from the schema
     for param in operation.get("parameters", []):
         if "$ref" in param:

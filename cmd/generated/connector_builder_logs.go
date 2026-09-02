@@ -35,7 +35,7 @@ var ConnectorBuilderLogsListCmd = &cobra.Command{
 			return exitcode.Wrap(fmt.Errorf("--connector-identifier must not be empty"), exitcode.Usage)
 		}
 
-		requestURL := strings.Replace(strings.Replace("https://dts-api."+domain+"/v1/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/logs", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderLogsListTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderLogsListConnectorIdentifier), 1)
+		requestURL := strings.Replace(strings.Replace("https://api."+domain+"/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/logs", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderLogsListTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderLogsListConnectorIdentifier), 1)
 
 		q := url.Values{}
 		if flagConnectorBuilderLogsListLimit != 0 {
@@ -77,7 +77,7 @@ var ConnectorBuilderLogsGetCmd = &cobra.Command{
 			return exitcode.Wrap(fmt.Errorf("--log-id must not be empty"), exitcode.Usage)
 		}
 
-		requestURL := strings.Replace(strings.Replace(strings.Replace("https://dts-api."+domain+"/v1/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/logs/{log_id}", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderLogsGetTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderLogsGetConnectorIdentifier), 1), "{log_id}", url.PathEscape(flagConnectorBuilderLogsGetLogId), 1)
+		requestURL := strings.Replace(strings.Replace(strings.Replace("https://api."+domain+"/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/logs/{log_id}", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderLogsGetTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderLogsGetConnectorIdentifier), 1), "{log_id}", url.PathEscape(flagConnectorBuilderLogsGetLogId), 1)
 
 		timeout := resolveTimeout(cmd, httpclient.DefaultTimeout)
 		result, err := executeRequest(cmd, "GET", requestURL, nil, apiKey, timeout, "Fetching log details...")

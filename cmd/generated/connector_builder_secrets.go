@@ -35,7 +35,7 @@ var ConnectorBuilderSecretsListCmd = &cobra.Command{
 			return exitcode.Wrap(fmt.Errorf("--connector-identifier must not be empty"), exitcode.Usage)
 		}
 
-		requestURL := strings.Replace(strings.Replace("https://dts-api."+domain+"/v1/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/secrets", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderSecretsListTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderSecretsListConnectorIdentifier), 1)
+		requestURL := strings.Replace(strings.Replace("https://api."+domain+"/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/secrets", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderSecretsListTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderSecretsListConnectorIdentifier), 1)
 
 		timeout := resolveTimeout(cmd, httpclient.DefaultTimeout)
 		result, err := executeRequest(cmd, "GET", requestURL, nil, apiKey, timeout, "Fetching secrets...")
@@ -78,7 +78,7 @@ var ConnectorBuilderSecretsCreateCmd = &cobra.Command{
 			flagConnectorBuilderSecretsCreateSecretValue = val
 		}
 
-		requestURL := strings.Replace(strings.Replace("https://dts-api."+domain+"/v1/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/secrets", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderSecretsCreateTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderSecretsCreateConnectorIdentifier), 1)
+		requestURL := strings.Replace(strings.Replace("https://api."+domain+"/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/secrets", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderSecretsCreateTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderSecretsCreateConnectorIdentifier), 1)
 
 		body := map[string]any{
 			"secret_name":  flagConnectorBuilderSecretsCreateSecretName,
@@ -130,7 +130,7 @@ var ConnectorBuilderSecretsUpdateCmd = &cobra.Command{
 			flagConnectorBuilderSecretsUpdateSecretValue = val
 		}
 
-		requestURL := strings.Replace(strings.Replace(strings.Replace("https://dts-api."+domain+"/v1/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/secrets/{secret_placeholder}", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderSecretsUpdateTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderSecretsUpdateConnectorIdentifier), 1), "{secret_placeholder}", url.PathEscape(flagConnectorBuilderSecretsUpdateSecretPlaceholder), 1)
+		requestURL := strings.Replace(strings.Replace(strings.Replace("https://api."+domain+"/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/secrets/{secret_placeholder}", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderSecretsUpdateTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderSecretsUpdateConnectorIdentifier), 1), "{secret_placeholder}", url.PathEscape(flagConnectorBuilderSecretsUpdateSecretPlaceholder), 1)
 
 		body := map[string]any{
 			"secret_value": flagConnectorBuilderSecretsUpdateSecretValue,
@@ -169,7 +169,7 @@ var ConnectorBuilderSecretsDeleteCmd = &cobra.Command{
 			return exitcode.Wrap(fmt.Errorf("--secret-placeholder must not be empty"), exitcode.Usage)
 		}
 
-		requestURL := strings.Replace(strings.Replace(strings.Replace("https://dts-api."+domain+"/v1/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/secrets/{secret_placeholder}", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderSecretsDeleteTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderSecretsDeleteConnectorIdentifier), 1), "{secret_placeholder}", url.PathEscape(flagConnectorBuilderSecretsDeleteSecretPlaceholder), 1)
+		requestURL := strings.Replace(strings.Replace(strings.Replace("https://api."+domain+"/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/secrets/{secret_placeholder}", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderSecretsDeleteTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderSecretsDeleteConnectorIdentifier), 1), "{secret_placeholder}", url.PathEscape(flagConnectorBuilderSecretsDeleteSecretPlaceholder), 1)
 
 		if err := confirmAction(cmd, strings.Replace("Delete secret {secret_placeholder}?", "{secret_placeholder}", flagConnectorBuilderSecretsDeleteSecretPlaceholder, 1)); err != nil {
 			return err

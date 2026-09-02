@@ -119,6 +119,21 @@ func executeRequestNoContent(cmd *cobra.Command, method, url string, body io.Rea
 	return err
 }
 
+// executeFormRequest sends an application/x-www-form-urlencoded request and returns the parsed JSON response.
+func executeFormRequest(cmd *cobra.Command, method, url string, body io.Reader, apiKey string, timeout time.Duration, spinnerText string) (any, error) {
+	resp, err := doRequest(cmd, method, url, body, "application/x-www-form-urlencoded", apiKey, timeout, spinnerText)
+	if err != nil {
+		return nil, err
+	}
+	return resp.ParseJSON()
+}
+
+// executeFormRequestNoContent sends an application/x-www-form-urlencoded request that returns no content body.
+func executeFormRequestNoContent(cmd *cobra.Command, method, url string, body io.Reader, apiKey string, timeout time.Duration, spinnerText string) error {
+	_, err := doRequest(cmd, method, url, body, "application/x-www-form-urlencoded", apiKey, timeout, spinnerText)
+	return err
+}
+
 // executeMultipartRequest sends a multipart/form-data request and returns the parsed JSON response.
 func executeMultipartRequest(cmd *cobra.Command, method, url string, body io.Reader, contentType, apiKey string, timeout time.Duration, spinnerText string) (any, error) {
 	resp, err := doRequest(cmd, method, url, body, contentType, apiKey, timeout, spinnerText)

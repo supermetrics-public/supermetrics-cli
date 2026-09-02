@@ -39,7 +39,7 @@ var BackfillsCreateCmd = &cobra.Command{
 			return exitcode.Wrap(fmt.Errorf("--range-end must not be empty"), exitcode.Usage)
 		}
 
-		requestURL := strings.Replace(strings.Replace("https://api."+domain+"/teams/{team_id}/transfers/{transfer_id}/backfills", "{team_id}", fmt.Sprintf("%d", flagBackfillsCreateTeamId), 1), "{transfer_id}", fmt.Sprintf("%d", flagBackfillsCreateTransferId), 1)
+		requestURL := strings.Replace(strings.Replace("https://dts-api."+domain+"/v1/teams/{team_id}/transfers/{transfer_id}/backfills", "{team_id}", fmt.Sprintf("%d", flagBackfillsCreateTeamId), 1), "{transfer_id}", fmt.Sprintf("%d", flagBackfillsCreateTransferId), 1)
 
 		body := map[string]any{
 			"range_start": flagBackfillsCreateRangeStart,
@@ -74,7 +74,7 @@ var BackfillsCreateCmd = &cobra.Command{
 			if backfillID == 0 {
 				return fmt.Errorf("could not extract backfill ID from response")
 			}
-			getURL := fmt.Sprintf("https://api.%s/teams/%d/backfills/%d", domain, flagBackfillsCreateTeamId, int64(backfillID))
+			getURL := fmt.Sprintf("https://dts-api.%s/v1/teams/%d/backfills/%d", domain, flagBackfillsCreateTeamId, int64(backfillID))
 			waitResult, waitErr := waitForBackfill(cmd, getURL, apiKey, timeout)
 			if waitResult != nil {
 				_ = printResult(cmd, waitResult)
@@ -97,7 +97,7 @@ var BackfillsGetCmd = &cobra.Command{
 			return err
 		}
 
-		requestURL := strings.Replace(strings.Replace("https://api."+domain+"/teams/{team_id}/backfills/{backfill_id}", "{team_id}", fmt.Sprintf("%d", flagBackfillsGetTeamId), 1), "{backfill_id}", fmt.Sprintf("%d", flagBackfillsGetBackfillId), 1)
+		requestURL := strings.Replace(strings.Replace("https://dts-api."+domain+"/v1/teams/{team_id}/backfills/{backfill_id}", "{team_id}", fmt.Sprintf("%d", flagBackfillsGetTeamId), 1), "{backfill_id}", fmt.Sprintf("%d", flagBackfillsGetBackfillId), 1)
 
 		timeout := resolveTimeout(cmd, httpclient.DefaultTimeout)
 		result, err := executeRequest(cmd, "GET", requestURL, nil, apiKey, timeout, "Fetching backfill...")
@@ -120,7 +120,7 @@ var BackfillsGetLatestCmd = &cobra.Command{
 			return err
 		}
 
-		requestURL := strings.Replace(strings.Replace("https://api."+domain+"/teams/{team_id}/transfers/{transfer_id}/backfills/latest", "{team_id}", fmt.Sprintf("%d", flagBackfillsGetLatestTeamId), 1), "{transfer_id}", fmt.Sprintf("%d", flagBackfillsGetLatestTransferId), 1)
+		requestURL := strings.Replace(strings.Replace("https://dts-api."+domain+"/v1/teams/{team_id}/transfers/{transfer_id}/backfills/latest", "{team_id}", fmt.Sprintf("%d", flagBackfillsGetLatestTeamId), 1), "{transfer_id}", fmt.Sprintf("%d", flagBackfillsGetLatestTransferId), 1)
 
 		timeout := resolveTimeout(cmd, httpclient.DefaultTimeout)
 		result, err := executeRequest(cmd, "GET", requestURL, nil, apiKey, timeout, "Fetching backfill...")
@@ -142,7 +142,7 @@ var BackfillsListIncompleteCmd = &cobra.Command{
 			return err
 		}
 
-		requestURL := strings.Replace("https://api."+domain+"/teams/{team_id}/backfills", "{team_id}", fmt.Sprintf("%d", flagBackfillsListIncompleteTeamId), 1)
+		requestURL := strings.Replace("https://dts-api."+domain+"/v1/teams/{team_id}/backfills", "{team_id}", fmt.Sprintf("%d", flagBackfillsListIncompleteTeamId), 1)
 
 		timeout := resolveTimeout(cmd, httpclient.DefaultTimeout)
 		result, err := executeRequest(cmd, "GET", requestURL, nil, apiKey, timeout, "Fetching backfills...")
@@ -165,7 +165,7 @@ var BackfillsCancelCmd = &cobra.Command{
 			return err
 		}
 
-		requestURL := strings.Replace(strings.Replace(strings.Replace("https://api."+domain+"/teams/{team_id}/backfills/{backfill_id}", "{team_id}", fmt.Sprintf("%d", flagBackfillsCancelTeamId), 1), "{backfill_id}", fmt.Sprintf("%d", flagBackfillsCancelBackfillId), 1), "{status}", "CANCELLED", 1)
+		requestURL := strings.Replace(strings.Replace(strings.Replace("https://dts-api."+domain+"/v1/teams/{team_id}/backfills/{backfill_id}", "{team_id}", fmt.Sprintf("%d", flagBackfillsCancelTeamId), 1), "{backfill_id}", fmt.Sprintf("%d", flagBackfillsCancelBackfillId), 1), "{status}", "CANCELLED", 1)
 
 		body := map[string]any{
 			"status": "CANCELLED",

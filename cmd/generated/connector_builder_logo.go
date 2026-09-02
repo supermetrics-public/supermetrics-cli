@@ -33,7 +33,7 @@ var ConnectorBuilderLogoGetCmd = &cobra.Command{
 			return exitcode.Wrap(fmt.Errorf("--connector-identifier must not be empty"), exitcode.Usage)
 		}
 
-		requestURL := strings.Replace(strings.Replace("https://dts-api."+domain+"/v1/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/logo", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderLogoGetTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderLogoGetConnectorIdentifier), 1)
+		requestURL := strings.Replace(strings.Replace("https://api."+domain+"/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/logo", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderLogoGetTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderLogoGetConnectorIdentifier), 1)
 
 		timeout := resolveTimeout(cmd, httpclient.DefaultTimeout)
 		result, err := executeRequest(cmd, "GET", requestURL, nil, apiKey, timeout, "Fetching logo...")
@@ -61,7 +61,7 @@ var ConnectorBuilderLogoUploadCmd = &cobra.Command{
 			return exitcode.Wrap(fmt.Errorf("--connector-identifier must not be empty"), exitcode.Usage)
 		}
 
-		requestURL := strings.Replace(strings.Replace("https://dts-api."+domain+"/v1/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/logo", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderLogoUploadTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderLogoUploadConnectorIdentifier), 1)
+		requestURL := strings.Replace(strings.Replace("https://api."+domain+"/v1/teams/{team_id}/connector_builder/connectors/{connector_identifier}/logo", "{team_id}", fmt.Sprintf("%d", flagConnectorBuilderLogoUploadTeamId), 1), "{connector_identifier}", url.PathEscape(flagConnectorBuilderLogoUploadConnectorIdentifier), 1)
 
 		filePath, cleanup, err := resolveFileInput(flagConnectorBuilderLogoUploadFile)
 		if err != nil {

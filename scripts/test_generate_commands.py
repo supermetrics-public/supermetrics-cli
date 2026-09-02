@@ -340,6 +340,35 @@ class TestExtractParamsMultipart(unittest.TestCase):
         self.assertEqual(by_name["title"]["in"], "form_field")
 
 
+class TestExtractParamsFormUrlencoded(unittest.TestCase):
+    def test_form_urlencoded_params(self):
+        spec = {}
+        operation = {
+            "requestBody": {
+                "content": {
+                    "application/x-www-form-urlencoded": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "title": {"type": "string", "description": "Connector title"},
+                                "description": {"type": "string", "description": "Connector description"},
+                            },
+                            "required": ["title"],
+                        }
+                    }
+                }
+            }
+        }
+        params = extract_params(spec, operation)
+        by_name = {p["name"]: p for p in params}
+        self.assertEqual(len(params), 2)
+        self.assertEqual(by_name["title"]["in"], "form_urlencoded")
+        self.assertEqual(by_name["title"]["cli_flag"], "title")
+        self.assertTrue(by_name["title"]["required"])
+        self.assertEqual(by_name["description"]["in"], "form_urlencoded")
+        self.assertFalse(by_name["description"]["required"])
+
+
 class TestGenerateRegisterFiles(unittest.TestCase):
     def _all_content(self, resources):
         """Join all generated file contents for assertion convenience."""
@@ -360,6 +389,12 @@ class TestGenerateRegisterFiles(unittest.TestCase):
         self.assertIn("isTerminal", content)
         self.assertIn("shouldUseColor", content)
         self.assertIn("NO_COLOR", content)
+
+    def test_contains_form_request_helper(self):
+        content = self._all_content({"accounts": {}})
+
+        self.assertIn("func executeFormRequest(", content)
+        self.assertIn("application/x-www-form-urlencoded", content)
 
     def test_is_generated_code(self):
         files = generate_register_files({})
