@@ -5,6 +5,14 @@
 # Each command within becomes a subcommand (e.g., "supermetrics login-links create").
 #
 # server_index: which server from the spec's servers[] to use (0-indexed).
+#
+# WARNING: server_index is a POSITIONAL index into the spec's servers[]. If a
+# spec sync reorders servers[], these indices silently point at the wrong server
+# (wrong host and/or missing version prefix) with no error — the generated URLs
+# just become wrong. Re-verify every server_index below against the synced
+# spec's servers[] whenever openapi-spec.yaml changes. (A durable fix would
+# resolve the server per operation from per-path `servers` overrides instead.)
+#
 #   0 = https://api.supermetrics.com/v2 (Data API)
 #   1 = https://api.supermetrics.com (Datasource search)
 #   2 = https://api.supermetrics.com/v2 (Management API)
