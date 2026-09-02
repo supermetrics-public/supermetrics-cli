@@ -1,6 +1,9 @@
 package httpclient
 
-import "net/http"
+import (
+	"net/http"
+	"slices"
+)
 
 // Middleware wraps an http.RoundTripper to add transport-level behavior
 // such as retry, rate limiting, or request tracing.
@@ -15,8 +18,8 @@ func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 
 // chain applies middlewares in order: first middleware is outermost (runs first).
 func chain(transport http.RoundTripper, middlewares []Middleware) http.RoundTripper {
-	for i := len(middlewares) - 1; i >= 0; i-- {
-		transport = middlewares[i](transport)
+	for _, middleware := range slices.Backward(middlewares) {
+		transport = middleware(transport)
 	}
 	return transport
 }

@@ -6,7 +6,7 @@ Supermetrics CLI (`supermetrics`) — a Go CLI for the Supermetrics API. Single 
 
 ```bash
 cp .env.example .env                      # One-time: dev environment variables
-make tools                                # One-time: install all dev tools
+make tools                                # One-time: install the pinned toolchain (mise install)
 make build                                # Build to bin/supermetrics
 make run ARGS="queries execute --help"    # Run without building
 make test                                 # All tests (Go + Python generator)
@@ -15,6 +15,8 @@ make test-python                          # Python generator tests only (via uv)
 make test-coverage                        # Race detector + coverage report
 make lint                                 # golangci-lint + ruff
 make lint-fix                             # Auto-fix lint and formatting
+make modernize                            # Apply go fix modernizers
+make modernize-check                      # Report available modernizations
 make generate                             # Regenerate CLI commands from OpenAPI spec
 make vet                                  # Static analysis
 make vulncheck                            # Known vulnerability scan

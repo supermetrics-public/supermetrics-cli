@@ -33,8 +33,7 @@ func Of(err error) int {
 	if err == nil {
 		return 0
 	}
-	var exitErr *Error
-	if errors.As(err, &exitErr) {
+	if exitErr, ok := errors.AsType[*Error](err); ok {
 		return exitErr.Code
 	}
 	return 1

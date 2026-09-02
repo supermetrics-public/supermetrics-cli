@@ -169,7 +169,7 @@ func TestResolveToken_ExpiredTokenRefreshSuccess(t *testing.T) {
 		require.NoError(t, r.ParseForm())
 		assert.Equal(t, "refresh_token", r.FormValue("grant_type"))
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"access_token":  "refreshed-access-token",
 			"refresh_token": "new-refresh-token",
 			"expires_in":    3600,
@@ -237,7 +237,7 @@ func TestResolveToken_RefreshKeepsExistingRefreshToken(t *testing.T) {
 	// Server returns empty refresh_token — should keep original
 	_, cleanup := withTestServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"access_token": "new-access",
 			"expires_in":   3600,
 			"token_type":   "Bearer",

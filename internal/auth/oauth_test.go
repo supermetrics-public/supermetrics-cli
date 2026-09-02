@@ -52,7 +52,7 @@ func TestPostTokenRequest_Success(t *testing.T) {
 		assert.Equal(t, "POST", r.Method)
 		assert.Equal(t, "application/x-www-form-urlencoded", r.Header.Get("Content-Type"))
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"access_token":  "test-access",
 			"refresh_token": "test-refresh",
 			"expires_in":    3600,
@@ -116,7 +116,7 @@ func TestRefresh_Success(t *testing.T) {
 		assert.Equal(t, "my-refresh", r.FormValue("refresh_token"))
 		assert.Equal(t, testOAuthCfg.ClientID, r.FormValue("client_id"))
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"access_token":  "new-access",
 			"refresh_token": "new-refresh",
 			"expires_in":    7200,
@@ -283,7 +283,7 @@ func TestExchangeCode_Success(t *testing.T) {
 		assert.Equal(t, "test-verifier", r.FormValue("code_verifier"))
 		assert.Equal(t, testOAuthCfg.ClientID, r.FormValue("client_id"))
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"access_token":  "exchanged-token",
 			"refresh_token": "exchanged-refresh",
 			"expires_in":    7200,
@@ -339,7 +339,7 @@ func TestLogin_StateInAuthorizeURL(t *testing.T) {
 func TestLogin_StateMismatchRejected(t *testing.T) {
 	_, cleanup := withTestServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"access_token":  "test-access",
 			"refresh_token": "test-refresh",
 			"expires_in":    3600,
@@ -378,7 +378,7 @@ func TestLogin_StateMismatchRejected(t *testing.T) {
 func TestLogin_CorrectStateAccepted(t *testing.T) {
 	_, cleanup := withTestServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"access_token":  "test-access",
 			"refresh_token": "test-refresh",
 			"expires_in":    3600,
