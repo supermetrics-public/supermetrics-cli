@@ -86,14 +86,14 @@ var ConnectorBuilderLogoUploadCmd = &cobra.Command{
 }
 
 func init() {
-	ConnectorBuilderLogoGetCmd.Flags().Int64Var(&flagConnectorBuilderLogoGetTeamId, "team-id", 0, "Unique identifier of the team")
+	ConnectorBuilderLogoGetCmd.Flags().Int64Var(&flagConnectorBuilderLogoGetTeamId, "team-id", 0, "ID of the team")
 	ConnectorBuilderLogoGetCmd.Flags().StringVar(&flagConnectorBuilderLogoGetConnectorIdentifier, "connector-identifier", "", "Unique identifier of the connector")
 	_ = ConnectorBuilderLogoGetCmd.MarkFlagRequired("team-id")
 	_ = ConnectorBuilderLogoGetCmd.MarkFlagRequired("connector-identifier")
 	ConnectorBuilderLogoCmd.AddCommand(ConnectorBuilderLogoGetCmd)
 
 	ConnectorBuilderLogoUploadCmd.Flags().StringVar(&flagConnectorBuilderLogoUploadFile, "file", "", "Path to file (reads from stdin if not provided)")
-	ConnectorBuilderLogoUploadCmd.Flags().Int64Var(&flagConnectorBuilderLogoUploadTeamId, "team-id", 0, "Unique identifier of the team")
+	ConnectorBuilderLogoUploadCmd.Flags().Int64Var(&flagConnectorBuilderLogoUploadTeamId, "team-id", 0, "ID of the team")
 	ConnectorBuilderLogoUploadCmd.Flags().StringVar(&flagConnectorBuilderLogoUploadConnectorIdentifier, "connector-identifier", "", "Unique identifier of the connector")
 	_ = ConnectorBuilderLogoUploadCmd.MarkFlagRequired("team-id")
 	_ = ConnectorBuilderLogoUploadCmd.MarkFlagRequired("connector-identifier")

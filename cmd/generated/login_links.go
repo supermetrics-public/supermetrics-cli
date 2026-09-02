@@ -35,9 +35,6 @@ var LoginLinksCreateCmd = &cobra.Command{
 		if flagLoginLinksCreateDsId == "" {
 			return exitcode.Wrap(fmt.Errorf("--ds-id must not be empty"), exitcode.Usage)
 		}
-		if flagLoginLinksCreateExpiryTime == "" {
-			return exitcode.Wrap(fmt.Errorf("--expiry-time must not be empty"), exitcode.Usage)
-		}
 
 		requestURL := "https://api." + domain + "/v2/ds/login/link"
 
@@ -133,13 +130,12 @@ var LoginLinksCloseCmd = &cobra.Command{
 
 func init() {
 	LoginLinksCreateCmd.Flags().StringVar(&flagLoginLinksCreateDsId, "ds-id", "", "Data source ID")
-	LoginLinksCreateCmd.Flags().StringVar(&flagLoginLinksCreateExpiryTime, "expiry-time", "", "Link expiry time as date, datetime or relative time string. Value is saved as ISO 8601, defaulting to midnight as time of day.")
+	LoginLinksCreateCmd.Flags().StringVar(&flagLoginLinksCreateExpiryTime, "expiry-time", "", "Link expiry time as datetime in ISO 8601 format or relative time string (e.g. \"10 hours\"). Defaulting to 24 hours from creation time.")
 	LoginLinksCreateCmd.Flags().StringVar(&flagLoginLinksCreateDescription, "description", "", "Internal description for the link. Not shown during the authentication attempt.")
 	LoginLinksCreateCmd.Flags().StringVar(&flagLoginLinksCreateRequireUsername, "require-username", "", "Data source username that needs to be used in authentication attempt. Normally used when renewing existing credentials.")
 	LoginLinksCreateCmd.Flags().StringVar(&flagLoginLinksCreateRedirectUrl, "redirect-url", "", "Custom URL to redirect to after successful authentication.")
 	LoginLinksCreateCmd.Flags().Bool("dry-run", false, "Print request details without executing")
 	_ = LoginLinksCreateCmd.MarkFlagRequired("ds-id")
-	_ = LoginLinksCreateCmd.MarkFlagRequired("expiry-time")
 	LoginLinksCmd.AddCommand(LoginLinksCreateCmd)
 
 	LoginLinksCmd.AddCommand(LoginLinksGetCmd)

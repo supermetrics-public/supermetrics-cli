@@ -196,7 +196,7 @@ var BackfillsCancelCmd = &cobra.Command{
 func init() {
 	BackfillsCreateCmd.Flags().StringVar(&flagBackfillsCreateRangeStart, "range-start", "", "Start date of the backfill range (inclusive)")
 	BackfillsCreateCmd.Flags().StringVar(&flagBackfillsCreateRangeEnd, "range-end", "", "End date of the backfill range (inclusive)")
-	BackfillsCreateCmd.Flags().Int64Var(&flagBackfillsCreateTeamId, "team-id", 0, "Unique identifier of the team")
+	BackfillsCreateCmd.Flags().Int64Var(&flagBackfillsCreateTeamId, "team-id", 0, "ID of the team")
 	BackfillsCreateCmd.Flags().Int64Var(&flagBackfillsCreateTransferId, "transfer-id", 0, "Unique identifier of the transfer")
 	BackfillsCreateCmd.Flags().Bool("wait", false, "Wait for completion and show progress")
 	BackfillsCreateCmd.Flags().Bool("dry-run", false, "Print request details without executing")
@@ -206,23 +206,23 @@ func init() {
 	_ = BackfillsCreateCmd.MarkFlagRequired("range-end")
 	BackfillsCmd.AddCommand(BackfillsCreateCmd)
 
-	BackfillsGetCmd.Flags().Int64Var(&flagBackfillsGetTeamId, "team-id", 0, "Unique identifier of the team")
+	BackfillsGetCmd.Flags().Int64Var(&flagBackfillsGetTeamId, "team-id", 0, "ID of the team")
 	BackfillsGetCmd.Flags().Int64Var(&flagBackfillsGetBackfillId, "backfill-id", 0, "Unique identifier of the backfill")
 	_ = BackfillsGetCmd.MarkFlagRequired("team-id")
 	_ = BackfillsGetCmd.MarkFlagRequired("backfill-id")
 	BackfillsCmd.AddCommand(BackfillsGetCmd)
 
-	BackfillsGetLatestCmd.Flags().Int64Var(&flagBackfillsGetLatestTeamId, "team-id", 0, "Unique identifier of the team")
+	BackfillsGetLatestCmd.Flags().Int64Var(&flagBackfillsGetLatestTeamId, "team-id", 0, "ID of the team")
 	BackfillsGetLatestCmd.Flags().Int64Var(&flagBackfillsGetLatestTransferId, "transfer-id", 0, "Unique identifier of the transfer")
 	_ = BackfillsGetLatestCmd.MarkFlagRequired("team-id")
 	_ = BackfillsGetLatestCmd.MarkFlagRequired("transfer-id")
 	BackfillsCmd.AddCommand(BackfillsGetLatestCmd)
 
-	BackfillsListIncompleteCmd.Flags().Int64Var(&flagBackfillsListIncompleteTeamId, "team-id", 0, "Unique identifier of the team")
+	BackfillsListIncompleteCmd.Flags().Int64Var(&flagBackfillsListIncompleteTeamId, "team-id", 0, "ID of the team")
 	_ = BackfillsListIncompleteCmd.MarkFlagRequired("team-id")
 	BackfillsCmd.AddCommand(BackfillsListIncompleteCmd)
 
-	BackfillsCancelCmd.Flags().Int64Var(&flagBackfillsCancelTeamId, "team-id", 0, "Unique identifier of the team")
+	BackfillsCancelCmd.Flags().Int64Var(&flagBackfillsCancelTeamId, "team-id", 0, "ID of the team")
 	BackfillsCancelCmd.Flags().Int64Var(&flagBackfillsCancelBackfillId, "backfill-id", 0, "Unique identifier of the backfill")
 	BackfillsCancelCmd.Flags().BoolP("yes", "y", false, "Skip confirmation prompt")
 	BackfillsCancelCmd.Flags().Bool("dry-run", false, "Print request details without executing")

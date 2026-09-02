@@ -89,15 +89,15 @@ var ConnectorBuilderLogsGetCmd = &cobra.Command{
 }
 
 func init() {
-	ConnectorBuilderLogsListCmd.Flags().IntVar(&flagConnectorBuilderLogsListLimit, "limit", 0, "Maximum number of log entries to return (1-1000)")
-	ConnectorBuilderLogsListCmd.Flags().StringVar(&flagConnectorBuilderLogsListBefore, "before", "", "Return logs before this timestamp (ISO 8601 format, for cursor pagination)")
-	ConnectorBuilderLogsListCmd.Flags().Int64Var(&flagConnectorBuilderLogsListTeamId, "team-id", 0, "Unique identifier of the team")
+	ConnectorBuilderLogsListCmd.Flags().IntVar(&flagConnectorBuilderLogsListLimit, "limit", 0, "Number of log entries to return, up to a maximum of 1000.")
+	ConnectorBuilderLogsListCmd.Flags().StringVar(&flagConnectorBuilderLogsListBefore, "before", "", "ISO 8601 timestamp to return logs before. If omitted, starts from latest entry.")
+	ConnectorBuilderLogsListCmd.Flags().Int64Var(&flagConnectorBuilderLogsListTeamId, "team-id", 0, "ID of the team")
 	ConnectorBuilderLogsListCmd.Flags().StringVar(&flagConnectorBuilderLogsListConnectorIdentifier, "connector-identifier", "", "Unique identifier of the connector")
 	_ = ConnectorBuilderLogsListCmd.MarkFlagRequired("team-id")
 	_ = ConnectorBuilderLogsListCmd.MarkFlagRequired("connector-identifier")
 	ConnectorBuilderLogsCmd.AddCommand(ConnectorBuilderLogsListCmd)
 
-	ConnectorBuilderLogsGetCmd.Flags().Int64Var(&flagConnectorBuilderLogsGetTeamId, "team-id", 0, "Unique identifier of the team")
+	ConnectorBuilderLogsGetCmd.Flags().Int64Var(&flagConnectorBuilderLogsGetTeamId, "team-id", 0, "ID of the team")
 	ConnectorBuilderLogsGetCmd.Flags().StringVar(&flagConnectorBuilderLogsGetConnectorIdentifier, "connector-identifier", "", "Unique identifier of the connector")
 	ConnectorBuilderLogsGetCmd.Flags().StringVar(&flagConnectorBuilderLogsGetLogId, "log-id", "", "Unique identifier of the log entry")
 	_ = ConnectorBuilderLogsGetCmd.MarkFlagRequired("team-id")

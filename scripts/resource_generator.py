@@ -77,14 +77,17 @@ def _generate_request_body(params, fixed_values, method, var_prefix, is_async):
     query_params = [p for p in params if p["in"] == "query"]
     file_params = [p for p in params if p["in"] == "file"]
     form_field_params = [p for p in params if p["in"] == "form_field"]
+    form_url_params = [p for p in params if p["in"] == "form_urlencoded"]
 
     has_body = len(body_params) > 0 or (len(fixed_values) > 0 and method_upper in ("POST", "PUT", "PATCH"))
     has_json_query = len(json_query_params) > 0
     has_multipart = len(file_params) > 0
+    has_form_url = len(form_url_params) > 0
 
     body_var = "nil"
     content_type_var = ""
     multipart_info = None
+    is_form = False
 
     if has_multipart:
         if len(file_params) > 1:
@@ -139,6 +142,13 @@ def _generate_request_body(params, fixed_values, method, var_prefix, is_async):
             for param in simple_params:
                 var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
                 lines.append(f'\t\tbody["{param["name"]}"] = {var_name}')
+            # KNOWN LIMITATION: object params are unmarshaled unconditionally, so
+            # omitting an OPTIONAL object flag makes the JSON parse fail on empty
+            # input and surface a usage error instead of skipping the field.
+            # Guarding the unmarshal on a non-empty value (for non-required
+            # params) would allow omission. Flagged in PR #62 review; deferred as
+            # a separate generator-robustness item since it touches this shared
+            # path beyond that PR's scope.
             for param in object_params:
                 var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
                 flag_name = param["cli_flag"]
@@ -163,6 +173,32 @@ def _generate_request_body(params, fixed_values, method, var_prefix, is_async):
         lines.append("\t\t}")
         lines.append("")
         body_var = "strings.NewReader(string(bodyJSON))"
+    elif has_form_url:
+        lines.append("\t\tform := url.Values{}")
+        for param in form_url_params:
+            var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
+            ft = go_flag_type(param)
+            if ft in ("int", "int64"):
+                value_expr = f'fmt.Sprintf("%d", {var_name})'
+            elif ft == "float64":
+                value_expr = f'fmt.Sprintf("%g", {var_name})'
+            elif ft == "bool":
+                value_expr = f'fmt.Sprintf("%t", {var_name})'
+            elif ft == "string":
+                value_expr = var_name
+            else:
+                value_expr = f'fmt.Sprintf("%v", {var_name})'
+            if not param["required"] and ft == "string":
+                lines.append(f'\t\tif {var_name} != "" {{')
+                lines.append(f'\t\t\tform.Set("{param["name"]}", {value_expr})')
+                lines.append("\t\t}")
+            else:
+                lines.append(f'\t\tform.Set("{param["name"]}", {value_expr})')
+        for fixed_name, fixed_val in fixed_values.items():
+            lines.append(f'\t\tform.Set("{fixed_name}", "{fixed_val}")')
+        lines.append("")
+        body_var = "strings.NewReader(form.Encode())"
+        is_form = True
     elif has_json_query:
         lines.append("\t\tjsonParams := map[string]any{")
         for param in json_query_params:
@@ -207,10 +243,10 @@ def _generate_request_body(params, fixed_values, method, var_prefix, is_async):
         lines.append("\t\t}")
         lines.append("")
 
-    return lines, body_var, content_type_var, multipart_info
+    return lines, body_var, content_type_var, multipart_info, is_form
 
 
-def _generate_execution(cmd_config, var_prefix, subdomain, path_prefix, timeout_expr, body_var, content_type_var=""):  # noqa: PLR0913
+def _generate_execution(cmd_config, var_prefix, subdomain, path_prefix, timeout_expr, body_var, content_type_var="", *, is_form=False):  # noqa: PLR0913
     """Emit Go code for request execution (sync/async/paginated/wait/no_content)."""
     lines = []
     is_async = cmd_config.get("async", False)
@@ -244,6 +280,9 @@ def _generate_execution(cmd_config, var_prefix, subdomain, path_prefix, timeout_
     if is_multipart:
         method = cmd_config.get("_method_upper", "POST")
         lines.append(f'\t\tresult, err := executeMultipartRequest(cmd, "{method}", requestURL, {body_var}, {content_type_var}, apiKey, timeout, "{spinner_text}")')
+    elif is_form:
+        method = cmd_config.get("_method_upper", "POST")
+        lines.append(f'\t\tresult, err := executeFormRequest(cmd, "{method}", requestURL, {body_var}, apiKey, timeout, "{spinner_text}")')
     elif is_async and is_paginated:
         lines.append("\t\tvar result any")
         lines.append(f"\t\tif {var_prefix}All || {var_prefix}Limit > 0 {{")
@@ -490,7 +529,7 @@ def generate_resource_file(resource_name, resource_config, spec, servers):
         # Request body/query params
         method_upper = method.upper()
         is_multipart = _has_file_params(params)
-        body_lines, body_var, content_type_var, multipart_info = _generate_request_body(params, fixed_values, method, var_prefix, is_async)
+        body_lines, body_var, content_type_var, multipart_info, is_form = _generate_request_body(params, fixed_values, method, var_prefix, is_async)
         lines.extend(body_lines)
 
         # Dry-run
@@ -531,7 +570,7 @@ def generate_resource_file(resource_name, resource_config, spec, servers):
 
         # Execution — pass method_upper through cmd_config for the helper
         cmd_config_with_method = {**cmd_config, "_method_upper": method_upper}
-        lines.extend(_generate_execution(cmd_config_with_method, var_prefix, subdomain, path_prefix, timeout_expr, body_var, content_type_var))
+        lines.extend(_generate_execution(cmd_config_with_method, var_prefix, subdomain, path_prefix, timeout_expr, body_var, content_type_var, is_form=is_form))
 
         lines.append("\t},")
         lines.append("}")

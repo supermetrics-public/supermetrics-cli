@@ -5,11 +5,19 @@
 # Each command within becomes a subcommand (e.g., "supermetrics login-links create").
 #
 # server_index: which server from the spec's servers[] to use (0-indexed).
+#
+# WARNING: server_index is a POSITIONAL index into the spec's servers[]. If a
+# spec sync reorders servers[], these indices silently point at the wrong server
+# (wrong host and/or missing version prefix) with no error — the generated URLs
+# just become wrong. Re-verify every server_index below against the synced
+# spec's servers[] whenever openapi-spec.yaml changes. (A durable fix would
+# resolve the server per operation from per-path `servers` overrides instead.)
+#
 #   0 = https://api.supermetrics.com/v2 (Data API)
 #   1 = https://api.supermetrics.com (Datasource search)
 #   2 = https://api.supermetrics.com/v2 (Management API)
-#   3 = https://dts-api.supermetrics.com/v1 (DWH Backfills API)
-#   4 = https://api.supermetrics.com/v1 (Connector Builder API)
+#   3 = https://api.supermetrics.com (Connector Builder API — its paths carry /v1)
+#   4 = https://dts-api.supermetrics.com/v1 (DWH Backfills API)
 
 resources:
   login-links:
@@ -74,7 +82,7 @@ resources:
 
   backfills:
     description: "Manage Data Warehouse backfills"
-    server_index: 3
+    server_index: 4
     commands:
       create:
         operation_id: createBackfill
@@ -115,7 +123,7 @@ resources:
 
   connector-builder:
     description: "Manage Connector Builder connectors"
-    server_index: 4
+    server_index: 3
     commands:
       list:
         operation_id: listConnectors
@@ -147,7 +155,7 @@ resources:
 
   connector-builder-secrets:
     description: "Manage secrets for Connector Builder connectors"
-    server_index: 4
+    server_index: 3
     commands:
       list:
         operation_id: listConnectorSecrets
@@ -177,7 +185,7 @@ resources:
 
   connector-builder-logs:
     description: "View Connector Builder execution logs"
-    server_index: 4
+    server_index: 3
     commands:
       list:
         operation_id: listConnectorLogs
@@ -190,7 +198,7 @@ resources:
 
   connector-builder-logo:
     description: "Manage Connector Builder connector logos"
-    server_index: 4
+    server_index: 3
     commands:
       get:
         operation_id: getConnectorLogo
