@@ -142,6 +142,13 @@ def _generate_request_body(params, fixed_values, method, var_prefix, is_async):
             for param in simple_params:
                 var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
                 lines.append(f'\t\tbody["{param["name"]}"] = {var_name}')
+            # KNOWN LIMITATION: object params are unmarshaled unconditionally, so
+            # omitting an OPTIONAL object flag makes the JSON parse fail on empty
+            # input and surface a usage error instead of skipping the field.
+            # Guarding the unmarshal on a non-empty value (for non-required
+            # params) would allow omission. Flagged in PR #62 review; deferred as
+            # a separate generator-robustness item since it touches this shared
+            # path beyond that PR's scope.
             for param in object_params:
                 var_name = f"{var_prefix}{snake_to_camel(param['name'])}"
                 flag_name = param["cli_flag"]
@@ -255,17 +262,6 @@ def _generate_execution(cmd_config, var_prefix, subdomain, path_prefix, timeout_
         lines.append(f'\t\tif err := executeMultipartRequestNoContent(cmd, "{method}", requestURL, {body_var}, {content_type_var}, apiKey, timeout, "{spinner_text}"); err != nil {{')
         lines.append("\t\t\treturn err")
         lines.append("\t\t}")
-        lines.append("\t\treturn nil")
-        return lines
-
-    if is_no_content and is_form:
-        method = cmd_config.get("_method_upper", "POST")
-        done_message = cmd_config.get("done_message", "Done.")
-        lines.append(f"\t\ttimeout := resolveTimeout(cmd, {timeout_expr})")
-        lines.append(f'\t\tif err := executeFormRequestNoContent(cmd, "{method}", requestURL, {body_var}, apiKey, timeout, "{spinner_text}"); err != nil {{')
-        lines.append("\t\t\treturn err")
-        lines.append("\t\t}")
-        lines.append(f'\t\tfmt.Fprintln(cli.InfoWriterErr(cmd), "{done_message}")')
         lines.append("\t\treturn nil")
         return lines
 

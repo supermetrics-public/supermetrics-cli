@@ -369,6 +369,39 @@ class TestExtractParamsFormUrlencoded(unittest.TestCase):
         self.assertFalse(by_name["description"]["required"])
 
 
+class TestServerIndexResolution(unittest.TestCase):
+    """Guard against silent breakage when the spec's servers[] is reordered.
+
+    server_index in command-mapping.yaml is a positional index into the spec's
+    servers[]; a spec sync that reorders servers[] can point a resource at the
+    wrong server with no error. This asserts each resource still resolves to its
+    expected host + version prefix, so a reorder fails loudly here instead.
+    """
+
+    def test_server_index_resolves_to_expected_host_and_prefix(self):
+        expected_by_resource = {
+            "accounts": ("api", "/v2"),
+            "queries": ("api", "/v2"),
+            "logins": ("api", "/v2"),
+            "login-links": ("api", "/v2"),
+            "datasource": ("api", ""),
+            "backfills": ("dts-api", "/v1"),
+            "connector-builder": ("api", ""),
+            "connector-builder-secrets": ("api", ""),
+            "connector-builder-logs": ("api", ""),
+            "connector-builder-logo": ("api", ""),
+        }
+        spec = load_yaml(SPEC_PATH)
+        mapping = load_yaml(MAPPING_PATH)
+        servers = spec.get("servers", [])
+        resources = mapping.get("resources", {})
+        for name, expected in expected_by_resource.items():
+            with self.subTest(resource=name):
+                idx = resources[name].get("server_index", 0)
+                self.assertLess(idx, len(servers), f"{name}: server_index {idx} out of range")
+                self.assertEqual(parse_server_url(servers[idx]["url"]), expected)
+
+
 class TestGenerateRegisterFiles(unittest.TestCase):
     def _all_content(self, resources):
         """Join all generated file contents for assertion convenience."""
