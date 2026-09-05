@@ -5,17 +5,20 @@ import unittest
 
 from generate_commands import MAPPING_PATH
 from generate_commands import SPEC_PATH
+from generate_commands import active_resources
 from generate_commands import extract_params
 from generate_commands import find_operation
 from generate_commands import generate_register_files
 from generate_commands import generate_resource_file
 from generate_commands import go_flag_func
 from generate_commands import go_flag_type
+from generate_commands import go_string_escape
 from generate_commands import go_var_type
 from generate_commands import go_zero_value
 from generate_commands import load_yaml
 from generate_commands import parse_server_url
 from generate_commands import parse_timeout
+from generate_commands import resolve_operation_server
 from generate_commands import resolve_ref
 from generate_commands import snake_to_camel
 from generate_commands import snake_to_kebab
@@ -735,6 +738,235 @@ class TestBooleanQueryParams(unittest.TestCase):
 
         # Must NOT set "false" unconditionally — only "true" inside the condition
         self.assertNotIn('q.Set("include_archived", "false")', content)
+
+
+class TestSnakeToCamelSanitizes(unittest.TestCase):
+    """Non-alphanumeric characters must produce valid, unique Go identifiers."""
+
+    def test_bracketed_param(self):
+        self.assertEqual(snake_to_camel("filter[category]"), "FilterCategory")
+
+    def test_bracketed_snake_param(self):
+        self.assertEqual(snake_to_camel("filter[is_new]"), "FilterIsNew")
+
+    def test_distinct_brackets_are_unique(self):
+        self.assertNotEqual(
+            snake_to_camel("filter[category]"),
+            snake_to_camel("filter[status]"),
+        )
+
+
+class TestGoStringEscape(unittest.TestCase):
+    """Descriptions embedded in Go string literals must be escaped."""
+
+    def test_newline(self):
+        self.assertEqual(go_string_escape("line1\nline2"), "line1\\nline2")
+
+    def test_quote(self):
+        self.assertEqual(go_string_escape('say "hi"'), 'say \\"hi\\"')
+
+    def test_backslash_and_tab(self):
+        self.assertEqual(go_string_escape("a\\b\tc"), "a\\\\b\\tc")
+
+    def test_none(self):
+        self.assertEqual(go_string_escape(None), "")
+
+
+class TestResolveOperationServer(unittest.TestCase):
+    """Server resolution must prefer per-path/op servers, then fall back to the global index."""
+
+    def test_path_level_server_wins(self):
+        spec = {
+            "servers": [{"url": "https://api.supermetrics.com/v2"}],
+            "paths": {
+                "/teams/{team_id}/backfills": {
+                    "servers": [{"url": "https://dts-api.supermetrics.com/v1"}],
+                },
+            },
+        }
+        subdomain, prefix = resolve_operation_server(
+            spec, "/teams/{team_id}/backfills", {}, spec["servers"], 0,
+        )
+        self.assertEqual((subdomain, prefix), ("dts-api", "/v1"))
+
+    def test_operation_level_server_wins_over_path(self):
+        spec = {
+            "servers": [],
+            "paths": {"/x": {"servers": [{"url": "https://api.supermetrics.com"}]}},
+        }
+        op = {"servers": [{"url": "https://dts-api.supermetrics.com/v1"}]}
+        subdomain, prefix = resolve_operation_server(spec, "/x", op, spec["servers"], 0)
+        self.assertEqual((subdomain, prefix), ("dts-api", "/v1"))
+
+    def test_falls_back_to_global_server_index(self):
+        # Old-style spec: no per-path servers, only a global servers list + resource index.
+        spec = {
+            "servers": [
+                {"url": "https://api.supermetrics.com/v2"},
+                {"url": "https://dts-api.supermetrics.com/v1"},
+            ],
+            "paths": {"/x": {}},
+        }
+        subdomain, prefix = resolve_operation_server(spec, "/x", {}, spec["servers"], 1)
+        self.assertEqual((subdomain, prefix), ("dts-api", "/v1"))
+
+    def test_default_when_no_servers(self):
+        spec = {"servers": [], "paths": {"/x": {}}}
+        subdomain, prefix = resolve_operation_server(spec, "/x", {}, [], 0)
+        self.assertEqual((subdomain, prefix), ("api", ""))
+
+
+class TestPerPathServerGeneration(unittest.TestCase):
+    """Generated URLs must use each operation's own server, not a single global one."""
+
+    def _make_spec(self):
+        return {
+            "servers": [{"url": "https://api.supermetrics.com/v2"}],
+            "paths": {
+                "/query/accounts": {
+                    "servers": [{"url": "https://api.supermetrics.com"}],
+                    "get": {"operationId": "getAccounts", "parameters": []},
+                },
+                "/teams/{team_id}/backfills": {
+                    "servers": [{"url": "https://dts-api.supermetrics.com/v1"}],
+                    "get": {
+                        "operationId": "listBackfills",
+                        "parameters": [
+                            {
+                                "name": "team_id",
+                                "in": "path",
+                                "required": True,
+                                "description": "Team",
+                                "schema": {"type": "integer"},
+                            },
+                        ],
+                    },
+                },
+            },
+        }
+
+    def test_two_commands_resolve_distinct_hosts(self):
+        spec = self._make_spec()
+        config = {
+            "description": "Mixed",
+            "commands": {
+                "accounts": {"operation_id": "getAccounts", "description": "Accounts"},
+                "backfills": {"operation_id": "listBackfills", "description": "Backfills"},
+            },
+        }
+        content = generate_resource_file("mixed", config, spec, spec["servers"])
+        # api host, no /v2 prefix
+        self.assertIn('"https://api." + domain + "/query/accounts"', content)
+        # dts-api host with /v1 prefix (raw generator output, before gofmt tightens spacing)
+        self.assertIn('"https://dts-api." + domain + "/v1/teams/{team_id}/backfills"', content)
+
+
+class TestSkipMissingOperation(unittest.TestCase):
+    """Commands whose operationId is absent from the spec are skipped, not fatal."""
+
+    def test_missing_op_is_skipped(self):
+        spec = {
+            "servers": [{"url": "https://api.supermetrics.com"}],
+            "paths": {
+                "/things": {"get": {"operationId": "listThings", "parameters": []}},
+            },
+        }
+        config = {
+            "description": "Things",
+            "commands": {
+                "list": {"operation_id": "listThings", "description": "List"},
+                "ghost": {"operation_id": "doesNotExist", "description": "Ghost"},
+            },
+        }
+        content = generate_resource_file("things", config, spec, spec["servers"])
+        # Present op generates its command var; missing op does not.
+        self.assertIn("ThingsListCmd", content)
+        self.assertNotIn("ThingsGhostCmd", content)
+
+
+class TestActiveResources(unittest.TestCase):
+    """Resource groups with no operations present in the spec are excluded entirely."""
+
+    def _spec(self):
+        return {
+            "servers": [{"url": "https://api.supermetrics.com"}],
+            "paths": {"/things": {"get": {"operationId": "listThings", "parameters": []}}},
+        }
+
+    def test_present_group_is_kept(self):
+        resources = {"things": {"commands": {"list": {"operation_id": "listThings"}}}}
+        self.assertIn("things", active_resources(resources, self._spec()))
+
+    def test_fully_missing_group_is_dropped(self):
+        resources = {
+            "things": {"commands": {"list": {"operation_id": "listThings"}}},
+            "ghosts": {"commands": {"list": {"operation_id": "listGhosts"}}},
+        }
+        result = active_resources(resources, self._spec())
+        self.assertIn("things", result)
+        self.assertNotIn("ghosts", result)
+
+    def test_partially_present_group_is_kept(self):
+        resources = {
+            "things": {
+                "commands": {
+                    "list": {"operation_id": "listThings"},
+                    "ghost": {"operation_id": "doesNotExist"},
+                },
+            },
+        }
+        self.assertIn("things", active_resources(resources, self._spec()))
+
+
+class TestAsyncFlatQueryEnvelope(unittest.TestCase):
+    """Async commands route flat query params through the ?json= envelope."""
+
+    def _make_spec(self):
+        return {
+            "servers": [{"url": "https://api.supermetrics.com"}],
+            "paths": {
+                "/query/data/{context_type}": {
+                    "servers": [{"url": "https://api.supermetrics.com"}],
+                    "get": {
+                        "operationId": "getData",
+                        "parameters": [
+                            {
+                                "name": "context_type",
+                                "in": "path",
+                                "required": True,
+                                "description": "Context",
+                                "schema": {"type": "string"},
+                            },
+                            {
+                                "name": "ds_id",
+                                "in": "query",
+                                "required": True,
+                                "description": "Data source",
+                                "schema": {"type": "string"},
+                            },
+                        ],
+                    },
+                },
+            },
+        }
+
+    def test_async_uses_json_envelope_for_flat_query(self):
+        spec = self._make_spec()
+        config = {
+            "description": "Queries",
+            "commands": {
+                "execute": {
+                    "operation_id": "getData",
+                    "description": "Execute",
+                    "async": True,
+                },
+            },
+        }
+        content = generate_resource_file("queries", config, spec, spec["servers"])
+        # The async helpers require jsonParams + baseURL to be defined.
+        self.assertIn("jsonParams := map[string]any{", content)
+        self.assertIn("baseURL := requestURL", content)
+        self.assertIn('requestURL += "?json=" + url.QueryEscape', content)
 
 
 if __name__ == "__main__":

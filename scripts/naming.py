@@ -5,8 +5,13 @@ from urllib.parse import urlparse
 
 
 def snake_to_camel(name: str) -> str:
-    """Convert snake_case or kebab-case to CamelCase."""
-    return "".join(word.capitalize() for word in re.split(r"[_\-]", name))
+    """Convert snake_case or kebab-case to CamelCase.
+
+    Any non-alphanumeric character is treated as a word separator so that parameter
+    names containing brackets or other punctuation (e.g. deep-object query params like
+    "filter[category]") produce valid, unique Go identifiers ("FilterCategory").
+    """
+    return "".join(word.capitalize() for word in re.split(r"[^0-9A-Za-z]+", name))
 
 
 def snake_to_kebab(name: str) -> str:

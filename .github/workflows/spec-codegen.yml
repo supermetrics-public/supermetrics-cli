@@ -1,0 +1,139 @@
+name: Spec Codegen (Claude)
+
+# Runs the full "spec change -> regenerated CLI" pipeline with Claude Code whenever a pull
+# request that modifies openapi-spec.yaml carries the `openapi-spec-update` label.
+#
+# Claude runs: make generate (fixing the generator in scripts/ if it breaks) -> make lint ->
+# make build -> make test (updating/adding Go tests in cmd/generated/*_test.go) -> updates
+# README.md + docs/examples.md, then commits the result to the PR branch and posts a summary.
+#
+# The model provider is Google Vertex AI (see docs/spec-codegen-automation.md for the required
+# secrets/variables and for the LiteLLM gateway alternative).
+#
+# NOTE: third-party actions are referenced by tag here for readability; pin them to a commit
+# SHA (as the other workflows in this repo do) before enabling in production.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - openapi-spec.yaml
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  codegen:
+    name: Regenerate CLI from spec
+    # Only run for PRs explicitly labeled for spec-driven codegen.
+    if: contains(github.event.pull_request.labels.*.name, 'openapi-spec-update')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # commit regenerated code back to the PR branch
+      pull-requests: write # post the summary comment
+      id-token: write # required for Vertex AI Workload Identity Federation (OIDC)
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          # Check out the PR head branch so Claude can commit/push regenerated code back to it.
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      # Optional but recommended: use a GitHub App token so commits pushed by Claude re-trigger
+      # the CI workflow (commits made with the default GITHUB_TOKEN do not). Configure APP_ID and
+      # APP_PRIVATE_KEY secrets, then pass steps.app-token.outputs.token as github_token below.
+      # - name: Generate GitHub App token
+      #   id: app-token
+      #   uses: actions/create-github-app-token@v2
+      #   with:
+      #     app-id: ${{ secrets.APP_ID }}
+      #     private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Install Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: .python-version
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8
+
+      - name: Install tools
+        run: make tools
+
+      - name: Authenticate to Google Cloud (Vertex AI)
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Run Claude Code codegen pipeline
+        uses: anthropics/claude-code-action@v1
+        with:
+          use_vertex: "true"
+          # Uncomment to make Claude's commits re-trigger CI (requires the app-token step above):
+          # github_token: ${{ steps.app-token.outputs.token }}
+          track_progress: true
+          use_sticky_comment: true
+          claude_args: |
+            --model claude-sonnet-4-5@20250929
+            --max-turns 40
+            --allowedTools "Bash(make:*),Bash(go:*),Bash(uv:*),Bash(git:*),Bash(goimports:*),Edit,Read,Write"
+          prompt: |
+            You are running in CI on a pull request that updated `openapi-spec.yaml`. Regenerate
+            the CLI from the spec and make the branch green. Work only on files related to code
+            generation, tests, and docs — do not touch unrelated code.
+
+            Do the following, in order:
+
+            1. Run `make generate`. If it fails, diagnose the cause and fix the generator in
+               `scripts/` (the Python code generator), then re-run until it succeeds. Never edit
+               files under `cmd/generated/` by hand — they are produced by the generator.
+            2. Run `make lint`, `make build`, and `make test`.
+            3. If tests fail because the spec changed request URLs, paths, parameters, or command
+               behavior, update the hand-written Go tests in `cmd/generated/*_test.go` to match the
+               new generated code. If the spec added new operations that are mapped to commands in
+               `scripts/command-mapping.yaml`, add Go integration tests covering them (follow the
+               existing test patterns: an httptest server, `executeRootCommand`, assertions on
+               method / URL path / query). Do NOT weaken assertions just to pass.
+            4. If new commands were added or existing commands changed, update the command tables in
+               `README.md` and add realistic usage examples to `docs/examples.md`.
+            5. Re-run `make lint && make build && make test` and confirm everything passes.
+            6. Commit all changes (including the regenerated `cmd/generated/` files) to the PR branch
+               with a clear message, then post a concise summary comment listing: generator changes,
+               new/changed commands, tests added/updated, and docs updated.
+
+            If `make generate` produces no changes and all checks already pass, say so and make no
+            commit.
+
+      # ------------------------------------------------------------------------------------------
+      # Alternative provider: LiteLLM / OpenAI-compatible gateway instead of Vertex AI.
+      # Remove the "Authenticate to Google Cloud" step and `use_vertex: "true"` above, drop the
+      # id-token permission, and configure the action like this instead:
+      #
+      #   - name: Run Claude Code codegen pipeline
+      #     uses: anthropics/claude-code-action@v1
+      #     with:
+      #       anthropic_api_key: ${{ secrets.LITELLM_KEY }}  # only to satisfy the launch check
+      #       track_progress: true
+      #       use_sticky_comment: true
+      #       claude_args: |
+      #         --model claude-sonnet-4-5-20250929
+      #         --max-turns 40
+      #         --allowedTools "Bash(make:*),Bash(go:*),Bash(uv:*),Bash(git:*),Edit,Read,Write"
+      #       prompt: |
+      #         ... (same prompt as above) ...
+      #     env:
+      #       ANTHROPIC_BASE_URL: ${{ vars.LITELLM_BASE_URL }}   # e.g. https://litellm.example.com
+      #       ANTHROPIC_AUTH_TOKEN: ${{ secrets.LITELLM_KEY }}   # Bearer token for the gateway
+      # ------------------------------------------------------------------------------------------

@@ -47,7 +47,11 @@ def extract_params(spec, operation):
 
         p = {
             "name": param["name"],
-            "cli_flag": snake_to_kebab(param["name"].lower().replace("-", "_").replace(" ", "_")),
+            # Deep-object query params (e.g. "filter[category]") become clean flags
+            # ("filter-category"); the original name is preserved in "name" for the URL.
+            "cli_flag": snake_to_kebab(
+                param["name"].lower().replace("[", "_").replace("]", "").replace("-", "_").replace(" ", "_"),
+            ),
             "in": param.get("in", "query"),
             "required": param.get("required", False),
             "description": param.get("description", ""),

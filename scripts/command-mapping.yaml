@@ -42,6 +42,10 @@ resources:
         description: "Close (deactivate) a login link"
         confirm: "Close login link?"
         spinner_text: "Closing login link..."
+      update:
+        operation_id: updateLoginLink
+        description: "Update a login link"
+        spinner_text: "Updating login link..."
 
   logins:
     description: "View authenticated data source logins"
@@ -55,6 +59,15 @@ resources:
         operation_id: listDataSourceLogins
         description: "List all data source logins"
         spinner_text: "Fetching logins..."
+      list-accounts:
+        operation_id: listDataSourceLoginAccounts
+        description: "List accounts for a data source login"
+        spinner_text: "Fetching login accounts..."
+      revoke:
+        operation_id: revokeDataSourceLogin
+        description: "Revoke a data source login"
+        confirm: "Revoke login {login_id}?"
+        spinner_text: "Revoking login..."
 
   accounts:
     description: "List available accounts for a data source"
@@ -79,6 +92,39 @@ resources:
         paginated: true
         exclude_params:
           - sync_timeout
+      submit:
+        operation_id: postData
+        description: "Submit a data query"
+        timeout: 60m
+        spinner_text: "Submitting query..."
+      fields:
+        operation_id: getFields
+        description: "List available fields for a data source"
+        spinner_text: "Fetching fields..."
+      segments:
+        operation_id: getSegments
+        description: "List available segments for a data source"
+        spinner_text: "Fetching segments..."
+      status:
+        operation_id: getQueryStatus
+        description: "Get the status of a query"
+        spinner_text: "Fetching query status..."
+      results:
+        operation_id: getQueryResults
+        description: "Get the results of a completed query"
+        spinner_text: "Fetching query results..."
+      history:
+        operation_id: getQueryHistory
+        description: "List recent query history"
+        spinner_text: "Fetching query history..."
+      get:
+        operation_id: getQuery
+        description: "Get a query by ID"
+        spinner_text: "Fetching query..."
+      list:
+        operation_id: listQueries
+        description: "List queries"
+        spinner_text: "Fetching queries..."
 
   backfills:
     description: "Manage Data Warehouse backfills"
@@ -120,6 +166,26 @@ resources:
         operation_id: getDatasourceDetails
         description: "Get datasource configuration details"
         spinner_text: "Fetching data source details..."
+      search:
+        operation_id: searchDataSources
+        description: "Search available data sources"
+        spinner_text: "Searching data sources..."
+      search-categories:
+        operation_id: getSearchCategories
+        description: "List data source search categories"
+        spinner_text: "Fetching categories..."
+      search-tags:
+        operation_id: getSearchTags
+        description: "List data source search tags"
+        spinner_text: "Fetching tags..."
+      search-statuses:
+        operation_id: getReleaseStatuses
+        description: "List data source release statuses"
+        spinner_text: "Fetching statuses..."
+      team-search:
+        operation_id: searchTeamDataSources
+        description: "Search data sources available to a team"
+        spinner_text: "Searching team data sources..."
 
   connector-builder:
     description: "Manage Connector Builder connectors"
@@ -152,6 +218,10 @@ resources:
         done_message: "Connector deleted."
         confirm: "Delete connector {connector_identifier}?"
         spinner_text: "Deleting connector..."
+      schema:
+        operation_id: getConnectorSchema
+        description: "Fetch the connector schema for a schema version"
+        spinner_text: "Fetching connector schema..."
 
   connector-builder-secrets:
     description: "Manage secrets for Connector Builder connectors"
@@ -208,3 +278,383 @@ resources:
         operation_id: uploadConnectorLogo
         description: "Upload a logo for a connector"
         spinner_text: "Uploading logo..."
+
+  # --- New management/DWH command groups (mapped from the combined OpenAPI spec).
+  # Server base URLs are resolved per-operation from each path's `servers` override,
+  # so these groups do not need a server_index.
+
+  transfers:
+    description: "Manage Data Warehouse transfers"
+    commands:
+      list:
+        operation_id: listTransfers
+        description: "List transfers for a team"
+        spinner_text: "Fetching transfers..."
+      get:
+        operation_id: getTransfer
+        description: "Get transfer configuration"
+        spinner_text: "Fetching transfer..."
+      create:
+        operation_id: createTransfer
+        description: "Create a transfer"
+        dry_run: true
+        spinner_text: "Creating transfer..."
+      update:
+        operation_id: updateTransfer
+        description: "Update transfer configuration"
+        spinner_text: "Updating transfer..."
+      delete:
+        operation_id: deleteTransfer
+        description: "Delete a transfer"
+        confirm: "Delete transfer {transfer_id}?"
+        spinner_text: "Deleting transfer..."
+      state:
+        operation_id: changeTransferState
+        description: "Change transfer state"
+        spinner_text: "Updating transfer state..."
+      runs:
+        operation_id: listTransferRuns
+        description: "List transfer runs"
+        spinner_text: "Fetching transfer runs..."
+      get-run:
+        operation_id: getTransferRun
+        description: "Get transfer run details"
+        spinner_text: "Fetching transfer run..."
+      available-sources:
+        operation_id: getAvailableSources
+        description: "Get available transfer sources"
+        spinner_text: "Fetching available sources..."
+      options:
+        operation_id: getTransferOptions
+        description: "Get available transfer options"
+        spinner_text: "Fetching transfer options..."
+      validate:
+        operation_id: validateTransfer
+        description: "Validate a transfer configuration"
+        spinner_text: "Validating transfer..."
+      validate-update:
+        operation_id: validateTransferUpdate
+        description: "Validate a transfer update"
+        spinner_text: "Validating transfer update..."
+
+  destinations:
+    description: "Manage Data Warehouse destinations"
+    commands:
+      list:
+        operation_id: listDestinations
+        description: "List destinations for a team"
+        spinner_text: "Fetching destinations..."
+      get:
+        operation_id: getDestination
+        description: "Get destination details"
+        spinner_text: "Fetching destination..."
+      create:
+        operation_id: createDestination
+        description: "Create a destination"
+        dry_run: true
+        spinner_text: "Creating destination..."
+      update:
+        operation_id: updateDestination
+        description: "Update a destination"
+        spinner_text: "Updating destination..."
+      delete:
+        operation_id: deleteDestination
+        description: "Delete a destination"
+        confirm: "Delete destination {destination_id}?"
+        spinner_text: "Deleting destination..."
+      usage:
+        operation_id: getDestinationUsage
+        description: "Get destination usage"
+        spinner_text: "Fetching destination usage..."
+      test-connection:
+        operation_id: testConnection
+        description: "Test a destination connection"
+        spinner_text: "Testing connection..."
+      search:
+        operation_id: searchTeamDestinations
+        description: "Search destinations available to a team"
+        spinner_text: "Searching destinations..."
+
+  data-source-connections:
+    description: "Manage data source connections"
+    commands:
+      create:
+        operation_id: createDataSourceConnection
+        description: "Create a data source connection"
+        dry_run: true
+        spinner_text: "Creating data source connection..."
+
+  teams:
+    description: "Manage teams and team settings"
+    commands:
+      get:
+        operation_id: getTeam
+        description: "Get team details"
+        spinner_text: "Fetching team..."
+      update:
+        operation_id: updateTeam
+        description: "Update team properties"
+        spinner_text: "Updating team..."
+      settings-get:
+        operation_id: getTeamSettings
+        description: "Get team settings"
+        spinner_text: "Fetching team settings..."
+      settings-update:
+        operation_id: updateTeamSettings
+        description: "Update team settings"
+        spinner_text: "Updating team settings..."
+
+  team-users:
+    description: "Manage users within a team"
+    commands:
+      list:
+        operation_id: listTeamUsers
+        description: "List all users in a team"
+        spinner_text: "Fetching team users..."
+      invite:
+        operation_id: inviteTeamUser
+        description: "Invite a user to a team"
+        spinner_text: "Inviting user..."
+      update-role:
+        operation_id: updateTeamUserRole
+        description: "Update a user's role in a team"
+        spinner_text: "Updating user role..."
+      remove:
+        operation_id: removeTeamUser
+        description: "Remove a user from a team"
+        confirm: "Remove user {user_id} from team {team_id}?"
+        spinner_text: "Removing user..."
+
+  team-api-keys:
+    description: "Manage API keys for a team"
+    commands:
+      list:
+        operation_id: getTeamApiKeys
+        description: "List API keys for a team"
+        spinner_text: "Fetching API keys..."
+      get:
+        operation_id: getTeamApiKey
+        description: "Get an API key for a team"
+        spinner_text: "Fetching API key..."
+      create:
+        operation_id: createTeamApiKey
+        description: "Create an API key for a team"
+        spinner_text: "Creating API key..."
+      update:
+        operation_id: updateTeamApiKey
+        description: "Update an API key for a team"
+        spinner_text: "Updating API key..."
+
+  team-licenses:
+    description: "Manage licenses for a team"
+    commands:
+      list:
+        operation_id: listTeamLicenses
+        description: "List licenses for a team"
+        spinner_text: "Fetching licenses..."
+      assign:
+        operation_id: assignTeamLicenseUsers
+        description: "Assign users to a license"
+        spinner_text: "Assigning users..."
+      unassign:
+        operation_id: unassignTeamLicenseUser
+        description: "Unassign a user from a license"
+        confirm: "Unassign user {user_id} from license {license_id}?"
+        spinner_text: "Unassigning user..."
+
+  account-tags:
+    description: "Manage account tags (account groups)"
+    commands:
+      list:
+        operation_id: fetchAvailableAccountGroups
+        description: "List all account tags in a team"
+        spinner_text: "Fetching account tags..."
+      get:
+        operation_id: fetchAccountGroup
+        description: "Fetch a single account tag by name"
+        spinner_text: "Fetching account tag..."
+      create:
+        operation_id: createAccountGroup
+        description: "Create a new account tag"
+        spinner_text: "Creating account tag..."
+      update:
+        operation_id: updateAccountGroup
+        description: "Update an account tag"
+        spinner_text: "Updating account tag..."
+      delete:
+        operation_id: deleteAccountGroup
+        description: "Delete an account tag"
+        confirm: "Delete account tag {name}?"
+        spinner_text: "Deleting account tag..."
+      add-accounts:
+        operation_id: appendAccountsToGroup
+        description: "Add accounts to an account tag"
+        spinner_text: "Adding accounts..."
+      remove-accounts:
+        operation_id: removeAccountsFromGroup
+        description: "Remove accounts from an account tag"
+        spinner_text: "Removing accounts..."
+
+  custom-fields:
+    description: "Manage custom fields (transformations)"
+    commands:
+      list:
+        operation_id: fetchTransformationList
+        description: "Fetch custom fields list"
+        spinner_text: "Fetching custom fields..."
+      get:
+        operation_id: fetchTransformation
+        description: "Fetch an existing custom field"
+        spinner_text: "Fetching custom field..."
+      create:
+        operation_id: createTransformation
+        description: "Create a new custom field"
+        spinner_text: "Creating custom field..."
+      update:
+        operation_id: updateTransformation
+        description: "Update an existing custom field"
+        spinner_text: "Updating custom field..."
+      delete:
+        operation_id: deleteTransformation
+        description: "Remove an existing custom field"
+        confirm: "Delete custom field {custom_field_id}?"
+        spinner_text: "Deleting custom field..."
+      metadata:
+        operation_id: fetchMetadata
+        description: "Fetch custom field metadata"
+        spinner_text: "Fetching metadata..."
+
+  blends:
+    description: "Manage data blends"
+    commands:
+      list:
+        operation_id: getTeamBlends
+        description: "List all blends"
+        spinner_text: "Fetching blends..."
+      get:
+        operation_id: getBlend
+        description: "Get a blend by ID"
+        spinner_text: "Fetching blend..."
+      create:
+        operation_id: createBlend
+        description: "Create a blend"
+        spinner_text: "Creating blend..."
+      update:
+        operation_id: updateBlend
+        description: "Update a blend"
+        spinner_text: "Updating blend..."
+      delete:
+        operation_id: deleteBlend
+        description: "Delete a blend"
+        confirm: "Delete blend {blend_id}?"
+        spinner_text: "Deleting blend..."
+
+  table-groups:
+    description: "Manage table groups"
+    commands:
+      list:
+        operation_id: listTableGroups
+        description: "List table groups"
+        spinner_text: "Fetching table groups..."
+      export:
+        operation_id: exportTableGroup
+        description: "Export a table group"
+        spinner_text: "Exporting table group..."
+      import:
+        operation_id: importTableGroup
+        description: "Import a table group"
+        spinner_text: "Importing table group..."
+
+  workspaces:
+    description: "Manage sub-workspaces within a team"
+    commands:
+      list:
+        operation_id: listWorkspaces
+        description: "List workspaces for a team"
+        spinner_text: "Fetching workspaces..."
+      get:
+        operation_id: getWorkspace
+        description: "Get a single workspace by UUID"
+        spinner_text: "Fetching workspace..."
+      create:
+        operation_id: createWorkspace
+        description: "Create a new sub-workspace"
+        spinner_text: "Creating workspace..."
+      update:
+        operation_id: updateWorkspace
+        description: "Update a workspace by UUID"
+        spinner_text: "Updating workspace..."
+
+  workspace-users:
+    description: "Manage users within a workspace"
+    commands:
+      list:
+        operation_id: listWorkspaceUsers
+        description: "List all users in a workspace"
+        spinner_text: "Fetching workspace users..."
+      invite:
+        operation_id: inviteWorkspaceUser
+        description: "Invite users to a workspace"
+        spinner_text: "Inviting user..."
+      update:
+        operation_id: updateWorkspaceUser
+        description: "Update a workspace user's role"
+        spinner_text: "Updating workspace user..."
+      remove:
+        operation_id: removeWorkspaceUser
+        description: "Remove a user from a workspace"
+        confirm: "Remove user {user_id} from workspace {workspace_uuid}?"
+        spinner_text: "Removing workspace user..."
+      list-invites:
+        operation_id: listWorkspaceUserInvites
+        description: "List pending workspace invitations"
+        spinner_text: "Fetching invitations..."
+      update-invite:
+        operation_id: updateWorkspaceUserInvite
+        description: "Update a workspace invitation status"
+        spinner_text: "Updating invitation..."
+
+  workspace-api-keys:
+    description: "Manage API keys for a workspace"
+    commands:
+      list:
+        operation_id: getWorkspaceApiKeys
+        description: "List API keys for a workspace"
+        spinner_text: "Fetching API keys..."
+      get:
+        operation_id: getWorkspaceApiKey
+        description: "Get an API key for a workspace"
+        spinner_text: "Fetching API key..."
+      create:
+        operation_id: createWorkspaceApiKey
+        description: "Create an API key for a workspace"
+        spinner_text: "Creating API key..."
+      update:
+        operation_id: updateWorkspaceApiKey
+        description: "Update an API key for a workspace"
+        spinner_text: "Updating API key..."
+
+  workspace-licenses:
+    description: "Manage the license pool for a workspace"
+    commands:
+      pool-get:
+        operation_id: getWorkspaceLicensePool
+        description: "Get the license pool for a workspace"
+        spinner_text: "Fetching license pool..."
+      pool-upsert:
+        operation_id: upsertWorkspaceLicensePool
+        description: "Create or update the license pool for a workspace"
+        spinner_text: "Updating license pool..."
+      list:
+        operation_id: listWorkspaceLicensePoolLicenses
+        description: "List licenses in a workspace license pool"
+        spinner_text: "Fetching licenses..."
+      create:
+        operation_id: createWorkspaceLicensePoolLicenses
+        description: "Create licenses for a workspace license pool"
+        spinner_text: "Creating licenses..."
+      deallocate:
+        operation_id: deallocateWorkspaceLicensePoolLicense
+        description: "Deallocate a license from a workspace license pool"
+        confirm: "Deallocate license {license_id} from workspace {workspace_uuid}?"
+        spinner_text: "Deallocating license..."
