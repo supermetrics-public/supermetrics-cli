@@ -1,6 +1,6 @@
 module github.com/supermetrics-public/supermetrics-cli
 
-go 1.27.0
+go 1.27.1
 
 require (
 	github.com/mattn/go-isatty v0.0.24

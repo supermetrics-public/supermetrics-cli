@@ -6,7 +6,7 @@ idiomatic_version_file_enable_tools = ["python"]
 [tools]
 # Keep in sync with the `go` directive in go.mod; Renovate groups both into one
 # PR. This entry drives the updates — the gomod manager proposes none.
-go = "1.27.0"
+go = "1.27.1"
 
 golangci-lint = "2.13.2"
 gotestsum = "1.13.0"
