@@ -20,12 +20,9 @@
       "description": "Tool pins change what CI enforces; a new lint release can red every subsequent PR, so review rather than automerge",
       "matchManagers": ["mise"],
       "matchDepNames": [
-        "golangci-lint",
         "gotestsum",
         "ruff",
-        "uv",
-        "go:golang.org/x/tools/cmd/goimports",
-        "go:golang.org/x/vuln/cmd/govulncheck"
+        "uv"
       ],
       "groupName": "dev tools",
       "semanticCommitType": "build",
@@ -33,8 +30,13 @@
       "addLabels": ["tooling"]
     },
     {
-      "description": "Move both Go version pins — mise.toml and go.mod — in a single PR so they cannot drift apart",
-      "matchDepNames": ["go"],
+      "description": "Move the Go version pins — mise.toml and go.mod — together with the Go tools built against the pinned toolchain, so they cannot drift apart",
+      "matchDepNames": [
+        "go",
+        "golangci-lint",
+        "go:golang.org/x/tools/cmd/goimports",
+        "go:golang.org/x/vuln/cmd/govulncheck"
+      ],
       "groupName": "go toolchain",
       "semanticCommitType": "build",
       "automerge": false,
