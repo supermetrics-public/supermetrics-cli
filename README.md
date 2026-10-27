@@ -10,8 +10,6 @@ links, schedule Data Warehouse backfills, and more from your terminal or scripts
 
 ### Homebrew (macOS / Linux)
 
-> **Note:** The Homebrew tap is not yet available. Use one of the other installation methods below.
-
 ```bash
 brew install supermetrics-public/tap/supermetrics
 ```
